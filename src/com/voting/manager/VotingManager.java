@@ -4,8 +4,10 @@ import com.voting.model.Candidate;
 import com.voting.model.Vote;
 import com.voting.model.Voter;
 import com.voting.util.VotingException;
-import com.voting.util.VotingException.*;
-
+import com.voting.util.VotingException.AlreadyVotedException;
+import com.voting.util.VotingException.CandidateNotFoundException;
+import com.voting.util.VotingException.ElectionClosedException;
+import com.voting.util.VotingException.VoterNotFoundException;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
