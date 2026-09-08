@@ -17,18 +17,19 @@ import java.util.stream.Collectors;
 /**
  * Central manager for the online voting system.
  *
- * <p>Responsibilities:</p>
- * <ul>
- *   <li>Register voters and candidates.</li>
- *   <li>Enforce the election time window.</li>
- *   <li>Authenticate voters and record votes (one per voter).</li>
- *   <li>Compute and display election results.</li>
- *   <li>Export a human-readable summary report to a text file.</li>
- * </ul>
+ * Responsibilities:
+ * - Register voters and candidates.
+ * - Enforce the election time window.
+ * - Authenticate voters and record votes (one per voter).
+ * - Compute and display election results.
+ * - Export a human-readable summary report to a text file.
  *
- * <p>Thread-safety: all mutating methods are {@code synchronized} so that
- * concurrent vote submissions are handled safely.</p>
+ * Lifecycle: configure -> register candidates/voters -> start -> vote -> results.
+ *
+ * Thread-safety: all mutating methods are synchronized so that
+ * concurrent vote submissions are handled safely.
  */
+
 public class VotingManager {
 
     private static final DateTimeFormatter DISPLAY_FMT =
@@ -36,9 +37,12 @@ public class VotingManager {
 
     // ── Election metadata ─────────────────────────────────────────────────────
 
-    private final String        electionName;
-    private final LocalDateTime electionStart;
-    private final LocalDateTime electionEnd;
+    private final String electionName;
+    private final int    durationMinutes;
+
+    /** Set when {@link #startElection()} is called. */
+    private LocalDateTime electionStart;
+    private LocalDateTime electionEnd;
 
     // ── Registries ────────────────────────────────────────────────────────────
 
@@ -50,8 +54,35 @@ public class VotingManager {
     /** Ordered log of every accepted ballot. */
     private final List<Vote> votes = new ArrayList<>();
 
+    // ── Constructors ──────────────────────────────────────────────────────────
+
     /**
-     * Constructs a VotingManager with the given election window.
+     * Constructs a VotingManager with a deferred voting window.
+     *
+     * <p>The election is <em>not</em> open yet — call {@link #startElection()}
+     * after all candidates and voters have been registered.</p>
+     *
+     * @param electionName    display name of this election
+     * @param durationMinutes how many minutes the voting window lasts once started
+     * @throws IllegalArgumentException if name is blank or duration ≤ 0
+     */
+    public VotingManager(String electionName, int durationMinutes) {
+        if (electionName == null || electionName.isBlank()) {
+            throw new IllegalArgumentException("Election name must not be null or blank.");
+        }
+        if (durationMinutes <= 0) {
+            throw new IllegalArgumentException("Duration must be greater than 0 minutes.");
+        }
+        this.electionName    = electionName.trim();
+        this.durationMinutes = durationMinutes;
+        // electionStart / electionEnd remain null until startElection()
+    }
+
+    /**
+     * Constructs a VotingManager with an explicit, already-active time window.
+     *
+     * <p>This constructor is kept for backward compatibility with the test
+     * suite, where elections must be open (or closed) immediately.</p>
      *
      * @param electionName  display name of this election
      * @param electionStart first moment at which votes are accepted (inclusive)
@@ -68,9 +99,41 @@ public class VotingManager {
             throw new IllegalArgumentException(
                     "Election start must be strictly before election end.");
         }
-        this.electionName  = electionName;
-        this.electionStart = electionStart;
-        this.electionEnd   = electionEnd;
+        this.electionName    = electionName;
+        this.durationMinutes = (int) java.time.Duration.between(electionStart, electionEnd).toMinutes();
+        this.electionStart   = electionStart;
+        this.electionEnd     = electionEnd;
+    }
+
+    // ── Election lifecycle ────────────────────────────────────────────────────
+
+    /**
+     * Starts the election. The voting window begins <em>now</em> and lasts
+     * for the configured duration.
+     *
+     * @throws IllegalStateException if the election has already been started
+     */
+    public synchronized void startElection() {
+        if (electionStart != null) {
+            throw new IllegalStateException("Election has already been started.");
+        }
+        this.electionStart = LocalDateTime.now();
+        this.electionEnd   = electionStart.plusMinutes(durationMinutes);
+    }
+
+    /** Returns {@code true} if {@link #startElection()} has been invoked. */
+    public synchronized boolean isElectionStarted() {
+        return electionStart != null;
+    }
+
+    /**
+     * Returns {@code true} if the election has been started <em>and</em>
+     * the current time is within the voting window.
+     */
+    public synchronized boolean isElectionOpen() {
+        if (electionStart == null) return false;
+        LocalDateTime now = LocalDateTime.now();
+        return !now.isBefore(electionStart) && !now.isAfter(electionEnd);
     }
 
     // ── Registration ──────────────────────────────────────────────────────────
@@ -102,6 +165,7 @@ public class VotingManager {
      *
      * <p>Validation sequence (order matters for meaningful error messages):</p>
      * <ol>
+     *   <li>Election must have been started.</li>
      *   <li>Voter must be registered.</li>
      *   <li>Candidate must be registered.</li>
      *   <li>Current time must be within the election window.</li>
@@ -118,6 +182,11 @@ public class VotingManager {
      */
     public synchronized Vote castVote(String voterId, String candidateId)
             throws VotingException {
+
+        // 0. Election must have been started
+        if (electionStart == null) {
+            throw new ElectionClosedException("Election has not been started yet.");
+        }
 
         // 1. Look up voter
         Voter voter = voters.get(voterId);
@@ -254,8 +323,10 @@ public class VotingManager {
             writeLine(bw, "  ELECTION SUMMARY REPORT");
             writeLine(bw, "=".repeat(66));
             writeLine(bw, "  Election  : " + electionName);
-            writeLine(bw, "  Opens     : " + electionStart.format(DISPLAY_FMT));
-            writeLine(bw, "  Closes    : " + electionEnd.format(DISPLAY_FMT));
+            writeLine(bw, "  Opens     : " + (electionStart != null
+                    ? electionStart.format(DISPLAY_FMT) : "Not started"));
+            writeLine(bw, "  Closes    : " + (electionEnd != null
+                    ? electionEnd.format(DISPLAY_FMT) : "Not started"));
             writeLine(bw, "  Generated : " + generatedAt);
             writeLine(bw, "-".repeat(66));
 
@@ -346,9 +417,10 @@ public class VotingManager {
         return Collections.unmodifiableList(votes);
     }
 
-    public String getElectionName() { return electionName; }
-    public LocalDateTime getElectionStart() { return electionStart; }
-    public LocalDateTime getElectionEnd()   { return electionEnd; }
+    public String        getElectionName()    { return electionName; }
+    public int           getDurationMinutes() { return durationMinutes; }
+    public LocalDateTime getElectionStart()   { return electionStart; }
+    public LocalDateTime getElectionEnd()     { return electionEnd; }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 

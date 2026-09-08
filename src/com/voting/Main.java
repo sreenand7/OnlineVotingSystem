@@ -1,116 +1,272 @@
 package com.voting;
-
+ 
 import com.voting.manager.VotingManager;
 import com.voting.model.Candidate;
 import com.voting.model.Voter;
 import com.voting.util.VotingException;
-
+ 
 import java.io.IOException;
-import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Scanner;
-
+ 
 /**
  * Entry point for the Online Voting System.
  *
- * <p>Presents a menu-driven command-line interface that lets an operator:</p>
- * <ul>
- *   <li>Set up an election with voters and candidates.</li>
- *   <li>Cast votes interactively.</li>
- *   <li>View real-time results.</li>
- *   <li>Export a report to a text file.</li>
- * </ul>
+ * Provides a menu-driven command-line interface with a phased workflow:
+ *   Phase 1 — Configure election (name + duration)
+ *   Phase 2 — Register candidates and voters
+ *   Phase 3 — Start election, cast votes
+ *   Phase 4 — Display / export results
  *
- * <p>Run: {@code java -cp out com.voting.Main}</p>
+ * Run using:
+ * java -cp output com.voting.Main
  */
-public class Main {
 
+public class Main {
+ 
     private static VotingManager manager;
     private static final Scanner sc = new Scanner(System.in);
-
+    private static final DateTimeFormatter TIME_FMT =
+            DateTimeFormatter.ofPattern("HH:mm:ss");
+ 
     public static void main(String[] args) {
         printBanner();
-        setupElection();
-        menuLoop();
+        setupElection();          // Phase 1: configure name + duration
+        registrationPhase();      // Phase 2: add candidates & voters
+        votingPhase();            // Phase 3: start election, cast votes
+        resultsPhase();           // Phase 4: display / export
+        System.out.println("  Goodbye!\n");
     }
-
-    // ── Setup ─────────────────────────────────────────────────────────────────
-
+ 
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Phase 1 — Configure election
+    // ═══════════════════════════════════════════════════════════════════════════
+ 
     /**
-     * Bootstraps a sample election with pre-registered voters and candidates,
-     * then gives the operator the option to start the voting window right now.
+     * Prompts the operator for election name and voting-window duration.
+     * The timer does NOT start yet — that happens in Phase 3.
      */
     private static void setupElection() {
-        System.out.println("\n  Setting up the General Election 2025 demo...\n");
-
-        // Election window: starts now, closes in 5 minutes (adjustable for demos)
-        LocalDateTime start = LocalDateTime.now();
-        LocalDateTime end   = start.plusMinutes(5);
-
-        manager = new VotingManager("General Election 2025", start, end);
-
-        // ── Register candidates ───────────────────────────────────────────────
-        manager.registerCandidate(new Candidate("C001", "Alice Mercer",    "National Progress Party"));
-        manager.registerCandidate(new Candidate("C002", "Bob Harrington",  "Liberty Alliance"));
-        manager.registerCandidate(new Candidate("C003", "Clara Vasquez",   "Green Future Party"));
-        manager.registerCandidate(new Candidate("C004", "David Chen",      "United Democrats"));
-
-        // ── Register voters ───────────────────────────────────────────────────
-        manager.registerVoter(new Voter("V001", "Ethan Walker"));
-        manager.registerVoter(new Voter("V002", "Fiona Murphy"));
-        manager.registerVoter(new Voter("V003", "George Kim"));
-        manager.registerVoter(new Voter("V004", "Hannah Patel"));
-        manager.registerVoter(new Voter("V005", "Ivan Sokolov"));
-        manager.registerVoter(new Voter("V006", "Julia Santos"));
-        manager.registerVoter(new Voter("V007", "Kevin O'Brien"));
-        manager.registerVoter(new Voter("V008", "Laura Bianchi"));
-
-        System.out.println("  ✓  4 candidates registered.");
-        System.out.println("  ✓  8 voters registered.");
-        System.out.printf ("  ✓  Voting window: %s  →  %s%n%n",
-                start.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")),
-                end.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")));
+        System.out.println("\n  ── Phase 1: Election Setup ──\n");
+ 
+        System.out.print("  Enter election name: ");
+        String name = sc.nextLine().trim();
+        while (name.isEmpty()) {
+            System.out.print("  Election name cannot be empty. Enter election name: ");
+            name = sc.nextLine().trim();
+        }
+ 
+        int minutes = readPositiveInt("  Voting window duration in minutes: ");
+ 
+        manager = new VotingManager(name, minutes);
+ 
+        System.out.printf("%n  ✓  Election '%s' configured (%d-minute window).%n", name, minutes);
+        System.out.println("  ✓  Timer will start when you choose \"Start Election\".\n");
     }
-
-    // ── Menu loop ─────────────────────────────────────────────────────────────
-
-    private static void menuLoop() {
-        boolean running = true;
-        while (running) {
-            printMenu();
+ 
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Phase 2 — Registration
+    // ═══════════════════════════════════════════════════════════════════════════
+ 
+    /**
+     * Loops over a registration-only menu until the operator explicitly
+     * starts the election (option 5).
+     */
+    private static void registrationPhase() {
+        System.out.println("  ── Phase 2: Registration ──\n");
+ 
+        boolean registering = true;
+        while (registering) {
+            printRegistrationMenu();
             String choice = sc.nextLine().trim();
             System.out.println();
             switch (choice) {
-                case "1" -> listCandidates();
-                case "2" -> listVoters();
-                case "3" -> castVoteInteractive();
-                case "4" -> manager.displayResults();
-                case "5" -> exportReport();
-                case "6" -> runDemoVotes();
-                case "0" -> running = false;
-                default  -> System.out.println("  Invalid option. Please choose 0-6.\n");
+                case "1" -> addCandidate();
+                case "2" -> addVoter();
+                case "3" -> listCandidates();
+                case "4" -> listVoters();
+                case "5" -> {
+                    if (confirmStartElection()) {
+                        registering = false;
+                    }
+                }
+                case "0" -> {
+                    System.out.println("  Election cancelled.\n");
+                    System.exit(0);
+                }
+                default  -> System.out.println("  Invalid option. Please choose 0-5.\n");
             }
         }
-        System.out.println("  Goodbye!\n");
     }
-
-    private static void printMenu() {
+ 
+    private static void printRegistrationMenu() {
         System.out.println("┌─────────────────────────────────────────┐");
-        System.out.println("│       ONLINE VOTING SYSTEM  v1.0        │");
+        System.out.println("│          REGISTRATION  PHASE            │");
         System.out.println("├─────────────────────────────────────────┤");
-        System.out.println("│  1. List candidates                     │");
-        System.out.println("│  2. List registered voters              │");
-        System.out.println("│  3. Cast a vote                         │");
-        System.out.println("│  4. Display election results            │");
-        System.out.println("│  5. Export results to file              │");
-        System.out.println("│  6. Run demo votes (automated test)     │");
+        System.out.println("│  1. Add candidate                       │");
+        System.out.println("│  2. Add voter                           │");
+        System.out.println("│  3. List candidates                     │");
+        System.out.println("│  4. List registered voters              │");
+        System.out.println("│  5. ▶  Start election                   │");
+        System.out.println("│  0. Cancel & exit                       │");
+        System.out.println("└─────────────────────────────────────────┘");
+        System.out.print("  Choose an option: ");
+    }
+ 
+    /**
+     * Validates that at least one candidate and one voter exist,
+     * then confirms and starts the election timer.
+     */
+    private static boolean confirmStartElection() {
+        if (manager.getCandidates().isEmpty()) {
+            System.out.println("  ✗ Register at least one candidate before starting.\n");
+            return false;
+        }
+        if (manager.getVoters().isEmpty()) {
+            System.out.println("  ✗ Register at least one voter before starting.\n");
+            return false;
+        }
+ 
+        System.out.printf("  Ready to start '%s' with %d candidate(s) and %d voter(s).%n",
+                manager.getElectionName(),
+                manager.getCandidates().size(),
+                manager.getVoters().size());
+        System.out.print("  Confirm start? (y/n): ");
+        String confirm = sc.nextLine().trim().toLowerCase();
+
+        if (confirm.equals("y") || confirm.equals("yes")) {
+            manager.startElection();
+            System.out.printf("%n  ✓  Election started!%n");
+            System.out.printf("  ✓  Voting window: %s  →  %s%n%n",
+                    manager.getElectionStart().format(TIME_FMT),
+                    manager.getElectionEnd().format(TIME_FMT));
+            return true;
+        }
+        System.out.println("  Start cancelled — continue registering.\n");
+        return false;
+    }
+ 
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Phase 3 — Voting
+    // ═══════════════════════════════════════════════════════════════════════════
+ 
+    /**
+     * Loops over the voting menu until the operator ends the election
+     * or the time window expires.
+     */
+    private static void votingPhase() {
+        System.out.println("  ── Phase 3: Voting ──\n");
+ 
+        boolean voting = true;
+        while (voting) {
+            // Auto-detect window expiry
+            if (!manager.isElectionOpen()) {
+                System.out.println("  ⏰  Election voting window has ended.\n");
+                break;
+            }
+ 
+            printVotingMenu();
+            String choice = sc.nextLine().trim();
+            System.out.println();
+            switch (choice) {
+                case "1" -> castVoteInteractive();
+                case "2" -> listCandidates();
+                case "3" -> listVoters();
+                case "4" -> manager.displayResults();
+                case "5" -> {
+                    System.out.println("  Ending voting phase.\n");
+                    voting = false;
+                }
+                default  -> System.out.println("  Invalid option. Please choose 1-5.\n");
+            }
+        }
+    }
+ 
+    private static void printVotingMenu() {
+        System.out.println("┌─────────────────────────────────────────┐");
+        System.out.println("│            VOTING  PHASE                │");
+        System.out.println("├─────────────────────────────────────────┤");
+        System.out.println("│  1. Cast a vote                         │");
+        System.out.println("│  2. List candidates                     │");
+        System.out.println("│  3. List registered voters              │");
+        System.out.println("│  4. Display live results                │");
+        System.out.println("│  5. End voting & view results           │");
+        System.out.println("└─────────────────────────────────────────┘");
+        System.out.print("  Choose an option: ");
+    }
+ 
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Phase 4 — Results
+    // ═══════════════════════════════════════════════════════════════════════════
+ 
+    private static void resultsPhase() {
+        System.out.println("  ── Phase 4: Results ──\n");
+        manager.displayResults();
+ 
+        boolean viewing = true;
+        while (viewing) {
+            printResultsMenu();
+            String choice = sc.nextLine().trim();
+            System.out.println();
+            switch (choice) {
+                case "1" -> manager.displayResults();
+                case "2" -> exportReport();
+                case "0" -> viewing = false;
+                default  -> System.out.println("  Invalid option. Please choose 0-2.\n");
+            }
+        }
+    }
+ 
+    private static void printResultsMenu() {
+        System.out.println("┌─────────────────────────────────────────┐");
+        System.out.println("│           RESULTS  PHASE                │");
+        System.out.println("├─────────────────────────────────────────┤");
+        System.out.println("│  1. Display election results            │");
+        System.out.println("│  2. Export results to file              │");
         System.out.println("│  0. Exit                                │");
         System.out.println("└─────────────────────────────────────────┘");
         System.out.print("  Choose an option: ");
     }
-
-    // ── Option handlers ───────────────────────────────────────────────────────
-
+ 
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Shared option handlers
+    // ═══════════════════════════════════════════════════════════════════════════
+ 
+    private static void addCandidate() {
+        System.out.print("  Enter Candidate ID    : ");
+        String id = sc.nextLine().trim();
+        System.out.print("  Enter Candidate Name  : ");
+        String name = sc.nextLine().trim();
+        System.out.print("  Enter Political Party : ");
+        String party = sc.nextLine().trim();
+ 
+        try {
+            manager.registerCandidate(new Candidate(id, name, party));
+            System.out.println("  ✓ Candidate registered.\n");
+        } catch (IllegalArgumentException e) {
+            System.out.println("  ✗ Could not register candidate: " + e.getMessage() + "\n");
+        }
+    }
+ 
+    private static void addVoter() {
+        System.out.print("  Enter Voter ID   : ");
+        String id = sc.nextLine().trim();
+        System.out.print("  Enter Voter Name : ");
+        String name = sc.nextLine().trim();
+ 
+        try {
+            manager.registerVoter(new Voter(id, name));
+            System.out.println("  ✓ Voter registered.\n");
+        } catch (IllegalArgumentException e) {
+            System.out.println("  ✗ Could not register voter: " + e.getMessage() + "\n");
+        }
+    }
+ 
     private static void listCandidates() {
+        if (manager.getCandidates().isEmpty()) {
+            System.out.println("  No candidates registered yet.\n");
+            return;
+        }
         System.out.println("  Registered Candidates:");
         System.out.println("  " + "-".repeat(54));
         System.out.printf ("  %-8s  %-22s  %s%n", "ID", "Name", "Party");
@@ -121,8 +277,12 @@ public class Main {
         }
         System.out.println();
     }
-
+ 
     private static void listVoters() {
+        if (manager.getVoters().isEmpty()) {
+            System.out.println("  No voters registered yet.\n");
+            return;
+        }
         System.out.println("  Registered Voters:");
         System.out.println("  " + "-".repeat(46));
         System.out.printf ("  %-8s  %-22s  %s%n", "ID", "Name", "Voted?");
@@ -133,14 +293,14 @@ public class Main {
         }
         System.out.println();
     }
-
+ 
     private static void castVoteInteractive() {
         System.out.print("  Enter your Voter ID: ");
         String voterId = sc.nextLine().trim();
-
+ 
         System.out.print("  Enter Candidate ID : ");
         String candidateId = sc.nextLine().trim();
-
+ 
         try {
             manager.castVote(voterId, candidateId);
             System.out.println("  ✓ Vote successfully cast!\n");
@@ -148,7 +308,7 @@ public class Main {
             System.out.println("  ✗ Vote rejected: " + e.getMessage() + "\n");
         }
     }
-
+ 
     private static void exportReport() {
         System.out.print("  Enter output file path [election_results.txt]: ");
         String path = sc.nextLine().trim();
@@ -160,45 +320,26 @@ public class Main {
             System.out.println("  ✗ Export failed: " + e.getMessage() + "\n");
         }
     }
-
-    /**
-     * Runs a scripted sequence of votes to showcase all validation paths:
-     * successful votes, duplicate vote attempt, unknown voter, unknown candidate.
-     */
-    private static void runDemoVotes() {
-        System.out.println("  ── Running automated demo votes ──\n");
-
-        Object[][] scenarios = {
-            // voterId,  candidateId,  description
-            {"V001", "C001", "Valid vote: Ethan → Alice"},
-            {"V002", "C003", "Valid vote: Fiona → Clara"},
-            {"V003", "C002", "Valid vote: George → Bob"},
-            {"V004", "C001", "Valid vote: Hannah → Alice"},
-            {"V005", "C004", "Valid vote: Ivan → David"},
-            {"V006", "C002", "Valid vote: Julia → Bob"},
-            {"V001", "C002", "DUPLICATE: Ethan tries to vote again"},
-            {"V999", "C001", "UNKNOWN VOTER: V999"},
-            {"V007", "C999", "UNKNOWN CANDIDATE: C999"},
-            {"V007", "C003", "Valid vote: Kevin → Clara"},
-        };
-
-        for (Object[] s : scenarios) {
-            String voterId     = (String) s[0];
-            String candidateId = (String) s[1];
-            String desc        = (String) s[2];
-
-            System.out.printf("  [TEST] %s%n", desc);
+ 
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Helpers
+    // ═══════════════════════════════════════════════════════════════════════════
+ 
+    /** Reads a positive integer from the console, re-prompting on invalid input. */
+    private static int readPositiveInt(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String input = sc.nextLine().trim();
             try {
-                manager.castVote(voterId, candidateId);
-                System.out.println("         → SUCCESS\n");
-            } catch (VotingException e) {
-                System.out.println("         → REJECTED: " + e.getMessage() + "\n");
+                int value = Integer.parseInt(input);
+                if (value > 0) return value;
+                System.out.println("  Please enter a number greater than 0.");
+            } catch (NumberFormatException e) {
+                System.out.println("  Please enter a valid whole number.");
             }
         }
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
+ 
     private static void printBanner() {
         System.out.println();
         System.out.println("  ╔═══════════════════════════════════════════╗");
