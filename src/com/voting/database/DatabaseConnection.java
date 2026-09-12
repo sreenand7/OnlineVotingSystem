@@ -25,8 +25,8 @@ public final class DatabaseConnection {
             "jdbc:mysql://" + HOST + ":" + PORT + "/" + DATABASE
                     + "?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true";
 
-    private static final String USER     = "root";
-    private static final String PASSWORD = ""; // TODO: replace with your actual MySQL root password
+    private static final String USER     = System.getenv("DB_USER");
+    private static final String PASSWORD = System.getenv("DB_PASSWORD");
 
     // Prevent instantiation — this class only exposes static behavior.
     private DatabaseConnection() {

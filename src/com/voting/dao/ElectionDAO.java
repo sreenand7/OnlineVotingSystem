@@ -206,8 +206,8 @@ public class ElectionDAO {
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setTimestamp(1, Timestamp.valueOf(startTime));
-            stmt.setTimestamp(2, Timestamp.valueOf(endTime));
+            stmt.setObject(1, startTime);
+            stmt.setObject(2, endTime);
             stmt.setInt(3, electionId);
             stmt.executeUpdate();
         }
@@ -239,8 +239,8 @@ public class ElectionDAO {
         return new ElectionRecord(
                 rs.getInt("election_id"),
                 rs.getString("name"),
-                rs.getTimestamp("start_time").toLocalDateTime(),
-                rs.getTimestamp("end_time").toLocalDateTime(),
+                rs.getObject("start_time", LocalDateTime.class),
+                rs.getObject("end_time", LocalDateTime.class),
                 rs.getString("status"),
                 parentElectionId
         );
