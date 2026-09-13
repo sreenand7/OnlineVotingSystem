@@ -164,6 +164,29 @@ public class ElectionDAO {
     }
 
     /**
+     * Returns all elections regardless of status, most recent first.
+     *
+     * @return list of all elections (empty list if none)
+     * @throws SQLException if the query fails
+     */
+    public List<ElectionRecord> getAllElections() throws SQLException {
+        String sql = "SELECT election_id, name, start_time, end_time, status, parent_election_id "
+                + "FROM elections ORDER BY election_id DESC";
+
+        List<ElectionRecord> results = new ArrayList<>();
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                results.add(mapRow(rs));
+            }
+        }
+        return results;
+    }
+
+    /**
      * Returns all elections whose status is COMPLETED, most recent first.
      *
      * @return list of completed elections (empty list if none)

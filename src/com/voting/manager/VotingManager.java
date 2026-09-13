@@ -455,7 +455,7 @@ public class VotingManager {
         int totalVoters = voterDAO.getVotersForElection(electionId).size();
 
         System.out.println();
-        System.out.println("╔══════════════════════════════════════════════════════════════╗");
+        System.out.println("╔════════════════════════════════════════════════════════════════╗");
         System.out.printf ("║  ELECTION RESULTS: %-43s║%n", record.name);
         System.out.println("╠══════════╦══════════════════════════╦════════════╦════════════╣");
         System.out.println("║    ID    ║         Candidate        ║   Party    ║   Votes    ║");
@@ -465,7 +465,7 @@ public class VotingManager {
             Candidate c     = candidates.get(entry.getKey());
             long      count = entry.getValue();
             double    pct   = totalVotes == 0 ? 0 : 100.0 * count / totalVotes;
-            System.out.printf("║ %-8s ║ %-24s ║ %-10s ║ %4d(%5.1f%%) ║%n",
+            System.out.printf("║ %-8s ║ %-24s ║ %-10s ║ %4d(%5.1f%%)║%n",
                     c.getCandidateId(),
                     truncate(c.getName(), 24),
                     truncate(c.getPoliticalParty(), 10),
@@ -497,7 +497,7 @@ public class VotingManager {
                                .collect(Collectors.joining(", ")));
             }
         }
-        System.out.println("╚══════════════════════════════════════════════════════════════╝");
+        System.out.println("╚════════════════════════════════════════════════════════════════╝");
         System.out.println();
     }
 

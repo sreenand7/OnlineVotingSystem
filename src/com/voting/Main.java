@@ -6,7 +6,6 @@ import com.voting.manager.VotingManager;
 import com.voting.model.Candidate;
 import com.voting.model.Voter;
 import com.voting.util.VotingException;
-
 import java.io.IOException;
 import java.sql.SQLException;
 import java.time.format.DateTimeFormatter;
@@ -784,8 +783,8 @@ public class Main {
     private static void printBanner() {
         System.out.println();
         System.out.println("  ╔═══════════════════════════════════════════╗");
-        System.out.println("  ║      ONLINE VOTING SYSTEM  v2.0          ║");
-        System.out.println("  ║      Secure · Fair · Transparent         ║");
+        System.out.println("  ║      ONLINE VOTING SYSTEM  v2.0           ║");
+        System.out.println("  ║      Secure · Fair · Transparent          ║");
         System.out.println("  ╚═══════════════════════════════════════════╝");
         System.out.println();
     }
