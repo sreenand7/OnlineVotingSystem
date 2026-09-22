@@ -1,5 +1,4 @@
-package com.voting.model;
-
+package com.voting;
 /**
  * Represents a candidate standing for election.
  *

@@ -1,11 +1,4 @@
 package com.voting;
-
-import com.voting.dao.ElectionDAO;
-import com.voting.dao.ElectionDAO.ElectionRecord;
-import com.voting.manager.VotingManager;
-import com.voting.model.Candidate;
-import com.voting.model.Voter;
-import com.voting.util.VotingException;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.time.format.DateTimeFormatter;
@@ -155,7 +148,7 @@ public class Main {
 
         // Determine current status and branch accordingly
         try {
-            ElectionRecord record = electionDAO.findById(electionId);
+            ElectionDAO.ElectionRecord record = electionDAO.findById(electionId);
             if (record == null) {
                 System.out.println("  ✗ Election not found.\n");
                 return;
@@ -198,7 +191,7 @@ public class Main {
     private static void viewPreviousElections() {
         System.out.println("  ── Previous Elections ──\n");
 
-        List<ElectionRecord> completed;
+        List<ElectionDAO.ElectionRecord> completed;
         try {
             completed = electionDAO.getCompletedElections();
         } catch (SQLException e) {
@@ -216,7 +209,7 @@ public class Main {
         System.out.printf("  %-6s  %-28s  %-20s  %-10s  %s%n",
                 "ID", "Name", "End Time", "Status", "Parent ID");
         System.out.println("  " + "-".repeat(78));
-        for (ElectionRecord rec : completed) {
+        for (ElectionDAO.ElectionRecord rec : completed) {
             System.out.printf("  %-6d  %-28s  %-20s  %-10s  %s%n",
                     rec.electionId,
                     truncate(rec.name, 28),
@@ -232,8 +225,8 @@ public class Main {
         if (selectedId == 0) return;
 
         // Verify the selected ID is among the completed elections
-        ElectionRecord selected = null;
-        for (ElectionRecord rec : completed) {
+        ElectionDAO.ElectionRecord selected = null;
+        for (ElectionDAO.ElectionRecord rec : completed) {
             if (rec.electionId == selectedId) {
                 selected = rec;
                 break;
@@ -263,7 +256,7 @@ public class Main {
      * Menu for a completed election: view results, candidates, export,
      * or conduct a re-election.
      */
-    private static void completedElectionMenu(ElectionRecord record) {
+    private static void completedElectionMenu(ElectionDAO.ElectionRecord record) {
         boolean viewing = true;
         while (viewing) {
             System.out.println("┌─────────────────────────────────────────┐");
@@ -304,7 +297,7 @@ public class Main {
     /**
      * Displays detailed information about a completed election.
      */
-    private static void displayElectionDetails(ElectionRecord record) {
+    private static void displayElectionDetails(ElectionDAO.ElectionRecord record) {
         System.out.println("  ── Election Details ──\n");
         System.out.println("  Election ID    : " + record.electionId);
         System.out.println("  Name           : " + record.name);
@@ -332,7 +325,7 @@ public class Main {
      * Creates a new election linked to a completed one via parent_election_id.
      * The old election is never modified.
      */
-    private static void conductReElection(ElectionRecord parentRecord) {
+    private static void conductReElection(ElectionDAO.ElectionRecord parentRecord) {
         System.out.println("  ── Conduct Re-Election ──\n");
         System.out.printf("  Original election: '%s' (ID: %d)%n%n", parentRecord.name, parentRecord.electionId);
 
@@ -749,7 +742,7 @@ public class Main {
      */
     private static String resolveElectionName(String name) {
         try {
-            ElectionRecord existing = electionDAO.findByName(name);
+            ElectionDAO.ElectionRecord existing = electionDAO.findByName(name);
             if (existing == null) {
                 return name;  // no duplicate
             }

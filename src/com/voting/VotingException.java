@@ -1,5 +1,4 @@
-package com.voting.util;
-
+package com.voting;
 /**
  * Hierarchy of checked exceptions for domain-level voting errors.
  *

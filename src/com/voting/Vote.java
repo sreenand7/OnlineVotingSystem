@@ -1,5 +1,4 @@
-package com.voting.model;
-
+package com.voting;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 

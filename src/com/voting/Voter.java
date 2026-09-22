@@ -1,5 +1,4 @@
-package com.voting.model;
-
+package com.voting;
 /**
  * Represents a registered voter in the election system.
  *
