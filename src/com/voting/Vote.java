@@ -1,14 +1,8 @@
 package com.voting;
+
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-/**
- * An immutable record of a single ballot cast during the election.
- *
- * <p>Instances are created by {@link com.voting.manager.VotingManager}
- * only after all validation checks pass. Once created a Vote cannot be
- * modified, ensuring auditability.</p>
- */
 public final class Vote {
 
     private static final DateTimeFormatter DISPLAY_FMT =
@@ -18,14 +12,6 @@ public final class Vote {
     private final Candidate     candidate;
     private final LocalDateTime timestamp;
 
-    /**
-     * Constructs a Vote record.
-     *
-     * @param voter     the voter who cast this ballot
-     * @param candidate the candidate who received this vote
-     * @param timestamp the exact moment the vote was recorded
-     * @throws IllegalArgumentException if any argument is null
-     */
     public Vote(Voter voter, Candidate candidate, LocalDateTime timestamp) {
         if (voter == null)     throw new IllegalArgumentException("Voter must not be null.");
         if (candidate == null) throw new IllegalArgumentException("Candidate must not be null.");
@@ -35,13 +21,9 @@ public final class Vote {
         this.timestamp = timestamp;
     }
 
-    // ── Getters ──────────────────────────────────────────────────────────────
-
     public Voter         getVoter()     { return voter; }
     public Candidate     getCandidate() { return candidate; }
-    public LocalDateTime getTimestamp() { return timestamp; }
-
-    // ── Object overrides ──────────────────────────────────────────────────────
+    public LocalDateTime getTimestamp()  { return timestamp; }
 
     @Override
     public String toString() {

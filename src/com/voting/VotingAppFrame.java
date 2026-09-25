@@ -10,15 +10,10 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 import javax.swing.*;
 import javax.swing.table.*;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
 
 class AddCandidatePanel extends JPanel {
 
@@ -73,9 +68,7 @@ class AddCandidatePanel extends JPanel {
             frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT);
         });
         btnRow.add(cancelBtn);
-
         btnRow.add(addBtn);
-
         card.add(btnRow);
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -88,28 +81,23 @@ class AddCandidatePanel extends JPanel {
     private void addCandidate() {
         String name  = nameField.getText().trim();
         String party = partyField.getText().trim();
-
         if (name.isEmpty() || party.isEmpty()) {
             JOptionPane.showMessageDialog(frame,
                     "Both candidate name and political party are required.",
                     "Validation Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
         try {
             Candidate c = frame.getCurrentManager().registerCandidate(name, party);
             JOptionPane.showMessageDialog(frame,
-                    String.format("Candidate '%s' registered! (ID: %s)",
-                            name, c.getCandidateId()),
+                    String.format("Candidate '%s' registered! (ID: %s)", name, c.getCandidateId()),
                     "Success", JOptionPane.INFORMATION_MESSAGE);
             clearFields();
         } catch (IllegalArgumentException ex) {
-            JOptionPane.showMessageDialog(frame, ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(frame, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(frame,
-                    "Database error: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+                    "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -172,9 +160,7 @@ class AddVoterPanel extends JPanel {
             frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT);
         });
         btnRow.add(cancelBtn);
-
         btnRow.add(addBtn);
-
         card.add(btnRow);
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -187,15 +173,12 @@ class AddVoterPanel extends JPanel {
     private void addVoter() {
         String id   = idField.getText().trim();
         String name = nameField.getText().trim();
-
         if (id.isEmpty() || name.isEmpty()) {
             JOptionPane.showMessageDialog(frame,
                     "Both voter ID and name are required.",
                     "Validation Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
-        // Validate numeric ID
         try {
             int parsed = Integer.parseInt(id);
             if (parsed <= 0) {
@@ -210,7 +193,6 @@ class AddVoterPanel extends JPanel {
                     "Validation Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
         try {
             frame.getCurrentManager().registerVoter(new Voter(id, name));
             JOptionPane.showMessageDialog(frame,
@@ -218,12 +200,10 @@ class AddVoterPanel extends JPanel {
                     "Success", JOptionPane.INFORMATION_MESSAGE);
             clearFields();
         } catch (IllegalArgumentException ex) {
-            JOptionPane.showMessageDialog(frame, ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(frame, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         } catch (SQLException | VotingException ex) {
             JOptionPane.showMessageDialog(frame,
-                    "Error: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+                    "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -233,8 +213,7 @@ class AddVoterPanel extends JPanel {
     }
 }
 
-class CandidatesPanel extends JPanel
-        implements VotingAppFrame.Refreshable {
+class CandidatesPanel extends JPanel implements VotingAppFrame.Refreshable {
 
     private final VotingAppFrame frame;
     private DefaultTableModel    tableModel;
@@ -248,25 +227,20 @@ class CandidatesPanel extends JPanel
         buildUI();
     }
 
-    /** Sets the screen the back button should navigate to. */
-    public void setReturnScreen(String screen) {
-        this.returnScreen = screen;
-    }
+    public void setReturnScreen(String screen) { this.returnScreen = screen; }
 
     private void buildUI() {
         JPanel header = UIConstants.createHeaderPanel("Candidates", "← Back",
                 () -> frame.showScreen(returnScreen));
         add(header, BorderLayout.NORTH);
 
-        tableModel = new DefaultTableModel(
-                new String[]{"ID", "Candidate", "Party"}, 0) {
+        tableModel = new DefaultTableModel(new String[]{"ID", "Candidate", "Party"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         JTable table = UIConstants.createStyledTable(tableModel);
         table.getColumnModel().getColumn(0).setPreferredWidth(80);
         table.getColumnModel().getColumn(1).setPreferredWidth(300);
         table.getColumnModel().getColumn(2).setPreferredWidth(250);
-
         add(UIConstants.wrapInScrollPane(table), BorderLayout.CENTER);
     }
 
@@ -274,14 +248,10 @@ class CandidatesPanel extends JPanel
     public void refresh() {
         tableModel.setRowCount(0);
         if (frame.getCurrentManager() == null) return;
-
         try {
-            Collection<Candidate> candidates =
-                    frame.getCurrentManager().getCandidates();
-            for (Candidate c : candidates) {
+            for (Candidate c : frame.getCurrentManager().getCandidates()) {
                 tableModel.addRow(new Object[]{
-                        c.getCandidateId(), c.getName(),
-                        c.getPoliticalParty()
+                        c.getCandidateId(), c.getName(), c.getPoliticalParty()
                 });
             }
         } catch (SQLException ex) {
@@ -310,7 +280,6 @@ class CreateElectionPanel extends JPanel {
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setBorder(BorderFactory.createEmptyBorder(48, 48, 48, 48));
 
-        // Header
         JLabel header = new JLabel("Create New Election");
         header.setFont(UIConstants.FONT_HEADER);
         header.setForeground(UIConstants.TEXT_PRIMARY);
@@ -318,7 +287,6 @@ class CreateElectionPanel extends JPanel {
         card.add(header);
         card.add(Box.createVerticalStrut(32));
 
-        // Election Name
         card.add(UIConstants.createFieldLabel("Election Name"));
         card.add(Box.createVerticalStrut(8));
         nameField = UIConstants.createStyledField();
@@ -326,7 +294,6 @@ class CreateElectionPanel extends JPanel {
         card.add(nameField);
         card.add(Box.createVerticalStrut(20));
 
-        // Duration
         card.add(UIConstants.createFieldLabel("Duration (minutes)"));
         card.add(Box.createVerticalStrut(8));
         durationField = UIConstants.createStyledField();
@@ -338,7 +305,6 @@ class CreateElectionPanel extends JPanel {
                 "Voting closes automatically once this duration elapses."));
         card.add(Box.createVerticalStrut(32));
 
-        // Buttons
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         btnRow.setOpaque(false);
         btnRow.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -353,9 +319,7 @@ class CreateElectionPanel extends JPanel {
             frame.showScreen(VotingAppFrame.SCREEN_ELECTION_SELECT);
         });
         btnRow.add(cancelBtn);
-
         btnRow.add(createBtn);
-
         card.add(btnRow);
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -365,16 +329,10 @@ class CreateElectionPanel extends JPanel {
         add(card, gbc);
     }
 
-    // ── Actions ─────────────────────────────────────────────────────────
-
     private void createElection() {
         String name = nameField.getText().trim();
         String durStr = durationField.getText().trim();
-
-        if (name.isEmpty()) {
-            warn("Election name cannot be empty.");
-            return;
-        }
+        if (name.isEmpty()) { warn("Election name cannot be empty."); return; }
         int duration;
         try {
             duration = Integer.parseInt(durStr);
@@ -383,29 +341,23 @@ class CreateElectionPanel extends JPanel {
             warn("Please enter a valid positive number for duration.");
             return;
         }
-
         try {
             if (new ElectionDAO().findByName(name) != null) {
                 warn("An election with this name already exists.");
                 return;
             }
-
             VotingManager manager = new VotingManager(name, duration);
             frame.setCurrentManager(manager);
-            frame.setCurrentRecord(
-                    new ElectionDAO().findById(manager.getElectionId()));
+            frame.setCurrentRecord(new ElectionDAO().findById(manager.getElectionId()));
             clearFields();
-
             JOptionPane.showMessageDialog(frame,
                     String.format("Election '%s' created successfully! (ID: %d)",
                             name, manager.getElectionId()),
                     "Success", JOptionPane.INFORMATION_MESSAGE);
-
             frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT);
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(frame,
-                    "Database error: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+                    "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -415,13 +367,11 @@ class CreateElectionPanel extends JPanel {
     }
 
     private void warn(String msg) {
-        JOptionPane.showMessageDialog(frame, msg,
-                "Validation Error", JOptionPane.WARNING_MESSAGE);
+        JOptionPane.showMessageDialog(frame, msg, "Validation Error", JOptionPane.WARNING_MESSAGE);
     }
 }
 
-class ElectionDetailsPanel extends JPanel
-        implements VotingAppFrame.Refreshable {
+class ElectionDetailsPanel extends JPanel implements VotingAppFrame.Refreshable {
 
     private final VotingAppFrame frame;
     private JLabel detailsLabel;
@@ -429,20 +379,17 @@ class ElectionDetailsPanel extends JPanel
     private JLabel votersCountLabel;
     private JLabel votesCastLabel;
     private String returnScreen = VotingAppFrame.SCREEN_PREVIOUS_ELECTIONS;
-    
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public ElectionDetailsPanel(VotingAppFrame frame) {
         this.frame = frame;
         setBackground(UIConstants.BG_DARK);
         setLayout(new BorderLayout());
-        setBorder(BorderFactory.createEmptyBorder(40, 60, 40, 60));
+        setBorder(BorderFactory.createEmptyBorder(30, 60, 30, 60));
         buildUI();
     }
 
-    public void setReturnScreen(String screen) {
-        this.returnScreen = screen;
-    }
+    public void setReturnScreen(String screen) { this.returnScreen = screen; }
 
     private void buildUI() {
         JPanel header = UIConstants.createHeaderPanel(
@@ -465,11 +412,10 @@ class ElectionDetailsPanel extends JPanel
         detailsLabel.setForeground(UIConstants.TEXT_PRIMARY);
         detailsLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         infoCard.add(detailsLabel);
-        
-        center.add(infoCard);
-        center.add(Box.createVerticalStrut(32));
 
-        // Stats row
+        center.add(infoCard);
+        center.add(Box.createVerticalStrut(24));
+
         JPanel statsRow = new JPanel(new GridLayout(1, 3, 16, 0));
         statsRow.setOpaque(false);
         statsRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 80));
@@ -484,7 +430,68 @@ class ElectionDetailsPanel extends JPanel
         statsRow.add(createStatCard("Total Votes Cast", votesCastLabel));
 
         center.add(statsRow);
+        center.add(Box.createVerticalStrut(24));
+
+        JPanel grid = new JPanel(new GridLayout(3, 2, 16, 16));
+        grid.setOpaque(false);
+        grid.setAlignmentX(Component.LEFT_ALIGNMENT);
+        grid.setMaximumSize(new Dimension(Integer.MAX_VALUE, 180));
+
+        JButton viewResultsBtn = UIConstants.createPrimaryButton("View Results");
+        viewResultsBtn.addActionListener(e -> {
+            ResultsPanel rp = frame.getScreen(VotingAppFrame.SCREEN_RESULTS);
+            rp.setReturnScreen(VotingAppFrame.SCREEN_ELECTION_DETAILS);
+            frame.showScreen(VotingAppFrame.SCREEN_RESULTS);
+        });
+        grid.add(viewResultsBtn);
+
+        JButton viewCandBtn = UIConstants.createSecondaryButton("View Candidates");
+        viewCandBtn.addActionListener(e -> {
+            CandidatesPanel cp = frame.getScreen(VotingAppFrame.SCREEN_CANDIDATES);
+            cp.setReturnScreen(VotingAppFrame.SCREEN_ELECTION_DETAILS);
+            frame.showScreen(VotingAppFrame.SCREEN_CANDIDATES);
+        });
+        grid.add(viewCandBtn);
+
+        JButton viewVoterBtn = UIConstants.createSecondaryButton("View Voters");
+        viewVoterBtn.addActionListener(e -> {
+            VotersPanel vp = frame.getScreen(VotingAppFrame.SCREEN_VOTERS);
+            vp.setReturnScreen(VotingAppFrame.SCREEN_ELECTION_DETAILS);
+            frame.showScreen(VotingAppFrame.SCREEN_VOTERS);
+        });
+        grid.add(viewVoterBtn);
+
+        JButton exportResultsBtn = UIConstants.createSecondaryButton("Export Results");
+        exportResultsBtn.addActionListener(e -> exportResults());
+        grid.add(exportResultsBtn);
+
+        JButton reElectBtn = UIConstants.createSecondaryButton("Conduct Re-election");
+        reElectBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_RE_ELECTION));
+        grid.add(reElectBtn);
+
+        JButton backBtn = UIConstants.createSecondaryButton("Back");
+        backBtn.addActionListener(e -> frame.showScreen(returnScreen));
+        grid.add(backBtn);
+
+        center.add(grid);
         add(center, BorderLayout.CENTER);
+    }
+
+    private void exportResults() {
+        VotingManager manager = frame.getCurrentManager();
+        if (manager == null) return;
+        try {
+            JFileChooser fc = new JFileChooser();
+            fc.setSelectedFile(new File("election_results_" + manager.getElectionId() + ".txt"));
+            if (fc.showSaveDialog(frame) == JFileChooser.APPROVE_OPTION) {
+                manager.exportResults(fc.getSelectedFile().getAbsolutePath());
+                JOptionPane.showMessageDialog(frame, "Results exported successfully!",
+                        "Export Complete", JOptionPane.INFORMATION_MESSAGE);
+            }
+        } catch (SQLException | IOException ex) {
+            JOptionPane.showMessageDialog(frame, "Error exporting results: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private JPanel createStatCard(String label, JLabel valueLabel) {
@@ -503,7 +510,6 @@ class ElectionDetailsPanel extends JPanel
         valueLabel.setForeground(UIConstants.TEXT_PRIMARY);
         valueLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         card.add(valueLabel);
-
         return card;
     }
 
@@ -513,18 +519,16 @@ class ElectionDetailsPanel extends JPanel
         VotingManager manager = frame.getCurrentManager();
         if (record == null || manager == null) return;
 
-        String parentText = record.parentElectionId != null 
-                ? " (Re-election of ID " + record.parentElectionId + ")" 
-                : "";
+        String parentText = record.parentElectionId != null
+                ? " (Re-election of ID " + record.parentElectionId + ")" : "";
 
-        StringBuilder sb = new StringBuilder("<html>");
-        sb.append("<h2 style='margin-top:0;'>").append(record.name).append("</h2>");
-        sb.append("<b>Election ID:</b> ").append(record.electionId).append(parentText).append("<br><br>");
-        sb.append("<b>Status:</b> ").append(record.status).append("<br>");
-        sb.append("<b>Start Time:</b> ").append(record.startTime != null ? record.startTime.format(FMT) : "N/A").append("<br>");
-        sb.append("<b>End Time:</b> ").append(record.endTime != null ? record.endTime.format(FMT) : "N/A").append("<br>");
-        sb.append("</html>");
-        detailsLabel.setText(sb.toString());
+        detailsLabel.setText("<html>"
+                + "<h2 style='margin-top:0;'>" + record.name + "</h2>"
+                + "<b>Election ID:</b> " + record.electionId + parentText + "<br><br>"
+                + "<b>Status:</b> " + record.status + "<br>"
+                + "<b>Start Time:</b> " + (record.startTime != null ? record.startTime.format(FMT) : "N/A") + "<br>"
+                + "<b>End Time:</b> " + (record.endTime != null ? record.endTime.format(FMT) : "N/A") + "<br>"
+                + "</html>");
 
         try {
             candidatesCountLabel.setText(String.valueOf(manager.getCandidates().size()));
@@ -538,8 +542,7 @@ class ElectionDetailsPanel extends JPanel
     }
 }
 
-class ElectionManagementPanel extends JPanel
-        implements VotingAppFrame.Refreshable {
+class ElectionManagementPanel extends JPanel implements VotingAppFrame.Refreshable {
 
     private final VotingAppFrame frame;
     private JLabel  nameLabel;
@@ -555,18 +558,15 @@ class ElectionManagementPanel extends JPanel
     }
 
     private void buildUI() {
-        // ── Header ──────────────────────────────────────────────────────
         JPanel header = UIConstants.createHeaderPanel(
                 "Election Management", "← Back to Home",
                 () -> frame.showScreen(VotingAppFrame.SCREEN_HOME));
         add(header, BorderLayout.NORTH);
 
-        // ── Center ──────────────────────────────────────────────────────
         JPanel center = new JPanel();
         center.setOpaque(false);
         center.setLayout(new BoxLayout(center, BoxLayout.Y_AXIS));
 
-        // Info card
         JPanel infoCard = new UIConstants.RoundedPanel(12, UIConstants.BG_CARD);
         infoCard.setLayout(new BoxLayout(infoCard, BoxLayout.Y_AXIS));
         infoCard.setBorder(BorderFactory.createEmptyBorder(24, 24, 24, 24));
@@ -591,28 +591,28 @@ class ElectionManagementPanel extends JPanel
         statusLabel.setFont(UIConstants.FONT_BODY);
         statusLabel.setForeground(UIConstants.STATUS_UPCOMING);
         statusRow.add(statusLabel);
-
         statusRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         infoCard.add(statusRow);
 
         center.add(infoCard);
         center.add(Box.createVerticalStrut(32));
 
-        // Action grid (3 rows × 2 cols)
-        JPanel grid = new JPanel(new GridLayout(3, 2, 16, 16));
+        JPanel grid = new JPanel(new GridLayout(4, 2, 16, 16));
         grid.setOpaque(false);
         grid.setAlignmentX(Component.LEFT_ALIGNMENT);
-        grid.setMaximumSize(new Dimension(Integer.MAX_VALUE, 180));
+        grid.setMaximumSize(new Dimension(Integer.MAX_VALUE, 240));
 
         JButton addCandBtn = UIConstants.createSecondaryButton("Add Candidate");
-        addCandBtn.addActionListener(e ->
-                frame.showScreen(VotingAppFrame.SCREEN_ADD_CANDIDATE));
+        addCandBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_ADD_CANDIDATE));
         grid.add(addCandBtn);
 
         JButton addVoterBtn = UIConstants.createSecondaryButton("Add Voter");
-        addVoterBtn.addActionListener(e ->
-                frame.showScreen(VotingAppFrame.SCREEN_ADD_VOTER));
+        addVoterBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_ADD_VOTER));
         grid.add(addVoterBtn);
+
+        JButton importVoterBtn = UIConstants.createSecondaryButton("Import Voter List");
+        importVoterBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_IMPORT_VOTERS));
+        grid.add(importVoterBtn);
 
         JButton viewCandBtn = UIConstants.createSecondaryButton("View Candidates");
         viewCandBtn.addActionListener(e -> {
@@ -635,81 +635,61 @@ class ElectionManagementPanel extends JPanel
         grid.add(startBtn);
 
         JButton backBtn = UIConstants.createSecondaryButton("Back");
-        backBtn.addActionListener(e ->
-                frame.showScreen(VotingAppFrame.SCREEN_ELECTION_SELECT));
+        backBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_ELECTION_SELECT));
         grid.add(backBtn);
 
         center.add(grid);
         add(center, BorderLayout.CENTER);
     }
 
-    // ── Start Election ──────────────────────────────────────────────────
-
     private void startElection() {
         VotingManager manager = frame.getCurrentManager();
         if (manager == null) return;
-
         try {
             if (manager.getCandidates().isEmpty()) {
-                warn("Register at least one candidate before starting.");
-                return;
+                warn("Register at least one candidate before starting."); return;
             }
             if (manager.getVoters().isEmpty()) {
-                warn("Register at least one voter before starting.");
-                return;
+                warn("Register at least one voter before starting."); return;
             }
 
             Object[] options = {"Cancel", "OK"};
             int confirm = JOptionPane.showOptionDialog(frame,
-                    "Are you sure you want to start the election?",
-                    "Start Election",
-                    JOptionPane.DEFAULT_OPTION,
-                    JOptionPane.QUESTION_MESSAGE,
-                    null,
-                    options,
-                    options[1]);
+                    "Are you sure you want to start the election?", "Start Election",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
+                    null, options, options[1]);
             if (confirm != 1) return;
 
             if (manager.getDurationMinutes() <= 0) {
                 String input = JOptionPane.showInputDialog(frame,
-                        "Enter voting duration in minutes:",
-                        "Duration Required",
+                        "Enter voting duration in minutes:", "Duration Required",
                         JOptionPane.QUESTION_MESSAGE);
                 if (input == null) return;
-                int minutes = Integer.parseInt(input.trim());
-                manager.startElection(minutes);
+                manager.startElection(Integer.parseInt(input.trim()));
             } else {
                 manager.startElection();
             }
 
-            frame.setCurrentRecord(
-                    new ElectionDAO().findById(manager.getElectionId()));
+            frame.setCurrentRecord(new ElectionDAO().findById(manager.getElectionId()));
             frame.showScreen(VotingAppFrame.SCREEN_VOTING);
-
         } catch (NumberFormatException ex) {
             warn("Please enter a valid number.");
         } catch (IllegalStateException | SQLException ex) {
-            JOptionPane.showMessageDialog(frame, ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(frame, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void warn(String msg) {
-        JOptionPane.showMessageDialog(frame, msg,
-                "Cannot Start", JOptionPane.WARNING_MESSAGE);
+        JOptionPane.showMessageDialog(frame, msg, "Cannot Start", JOptionPane.WARNING_MESSAGE);
     }
-
-    // ── Refreshable ─────────────────────────────────────────────────────
 
     @Override
     public void refresh() {
         VotingManager manager = frame.getCurrentManager();
         if (manager == null) return;
-
         try {
             nameLabel.setText(manager.getElectionName());
-            ElectionDAO.ElectionRecord record =
-                    new ElectionDAO().findById(manager.getElectionId());
+            ElectionDAO.ElectionRecord record = new ElectionDAO().findById(manager.getElectionId());
             if (record != null) {
                 frame.setCurrentRecord(record);
                 statusLabel.setText(record.status);
@@ -757,8 +737,7 @@ class ElectionSelectionPanel extends JPanel {
         card.add(Box.createVerticalStrut(40));
 
         JButton btnCreate = UIConstants.createPrimaryButton("Create New Election");
-        btnCreate.addActionListener(e ->
-                frame.showScreen(VotingAppFrame.SCREEN_CREATE_ELECTION));
+        btnCreate.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_CREATE_ELECTION));
         card.add(UIConstants.wrapButton(btnCreate, 48));
         card.add(Box.createVerticalStrut(12));
 
@@ -768,8 +747,7 @@ class ElectionSelectionPanel extends JPanel {
         card.add(Box.createVerticalStrut(12));
 
         JButton btnBack = UIConstants.createSecondaryButton("Back to Home");
-        btnBack.addActionListener(e ->
-                frame.showScreen(VotingAppFrame.SCREEN_HOME));
+        btnBack.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_HOME));
         card.add(UIConstants.wrapButton(btnBack, 48));
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -779,39 +757,25 @@ class ElectionSelectionPanel extends JPanel {
         add(card, gbc);
     }
 
-    // ── Enter Existing Election ─────────────────────────────────────────
-
     private void enterExistingElection() {
         String input = JOptionPane.showInputDialog(frame,
-                "Enter Election ID:",
-                "Existing Election", JOptionPane.PLAIN_MESSAGE);
+                "Enter Election ID:", "Existing Election", JOptionPane.PLAIN_MESSAGE);
         if (input == null || input.trim().isEmpty()) return;
 
         try {
             int electionId = Integer.parseInt(input.trim());
             VotingManager manager = new VotingManager(electionId);
-            ElectionDAO.ElectionRecord record =
-                    new ElectionDAO().findById(electionId);
-            if (record == null) {
-                showError("Election not found.");
-                return;
-            }
+            ElectionDAO.ElectionRecord record = new ElectionDAO().findById(electionId);
+            if (record == null) { showError("Election not found."); return; }
 
             frame.setCurrentManager(manager);
             frame.setCurrentRecord(record);
 
             switch (record.status) {
-                case "UPCOMING":
-                    frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT);
-                    break;
-                case "ACTIVE":
-                    frame.showScreen(VotingAppFrame.SCREEN_VOTING);
-                    break;
-                case "COMPLETED":
-                    frame.showScreen(VotingAppFrame.SCREEN_ELECTION_DETAILS);
-                    break;
-                default:
-                    showError("Unknown election status: " + record.status);
+                case "UPCOMING":  frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT); break;
+                case "ACTIVE":    frame.showScreen(VotingAppFrame.SCREEN_VOTING); break;
+                case "COMPLETED": frame.showScreen(VotingAppFrame.SCREEN_ELECTION_DETAILS); break;
+                default: showError("Unknown election status: " + record.status);
             }
         } catch (NumberFormatException ex) {
             showError("Please enter a valid numeric ID.");
@@ -823,8 +787,7 @@ class ElectionSelectionPanel extends JPanel {
     }
 
     private void showError(String msg) {
-        JOptionPane.showMessageDialog(frame, msg, "Error",
-                JOptionPane.ERROR_MESSAGE);
+        JOptionPane.showMessageDialog(frame, msg, "Error", JOptionPane.ERROR_MESSAGE);
     }
 }
 
@@ -844,13 +807,11 @@ class HomePanel extends JPanel {
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setBorder(BorderFactory.createEmptyBorder(48, 48, 48, 48));
 
-        // ── Ballot-box icon (rendered via Java2D) ───────────────────────
         JLabel iconLabel = new JLabel(createBallotIcon());
         iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         card.add(iconLabel);
         card.add(Box.createVerticalStrut(24));
 
-        // ── Title ───────────────────────────────────────────────────────
         JLabel title = new JLabel("Online Voting System");
         title.setFont(UIConstants.FONT_TITLE);
         title.setForeground(UIConstants.TEXT_PRIMARY);
@@ -858,7 +819,6 @@ class HomePanel extends JPanel {
         card.add(title);
         card.add(Box.createVerticalStrut(8));
 
-        // ── Subtitle ────────────────────────────────────────────────────
         JLabel subtitle = new JLabel("Election Management & Voting");
         subtitle.setFont(UIConstants.FONT_SUBTITLE);
         subtitle.setForeground(UIConstants.TEXT_SECONDARY);
@@ -866,16 +826,13 @@ class HomePanel extends JPanel {
         card.add(subtitle);
         card.add(Box.createVerticalStrut(40));
 
-        // ── Buttons ─────────────────────────────────────────────────────
         JButton btnStart = UIConstants.createPrimaryButton("Start / Select Election");
-        btnStart.addActionListener(e ->
-                frame.showScreen(VotingAppFrame.SCREEN_ELECTION_SELECT));
+        btnStart.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_ELECTION_SELECT));
         card.add(UIConstants.wrapButton(btnStart, 48));
         card.add(Box.createVerticalStrut(12));
 
         JButton btnHistory = UIConstants.createSecondaryButton("View Previous Elections");
-        btnHistory.addActionListener(e ->
-                frame.showScreen(VotingAppFrame.SCREEN_PREVIOUS_ELECTIONS));
+        btnHistory.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_PREVIOUS_ELECTIONS));
         card.add(UIConstants.wrapButton(btnHistory, 48));
         card.add(Box.createVerticalStrut(12));
 
@@ -884,14 +841,12 @@ class HomePanel extends JPanel {
         card.add(UIConstants.wrapButton(btnExit, 48));
         card.add(Box.createVerticalStrut(32));
 
-        // ── Footer ──────────────────────────────────────────────────────
         JLabel footer = new JLabel("Secure  |  Fair  |  Transparent");
         footer.setFont(UIConstants.FONT_SMALL);
         footer.setForeground(UIConstants.TEXT_MUTED);
         footer.setAlignmentX(Component.CENTER_ALIGNMENT);
         card.add(footer);
 
-        // Center the card
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 0;  gbc.gridy = 0;
         gbc.weightx = 1; gbc.weighty = 1;
@@ -899,35 +854,29 @@ class HomePanel extends JPanel {
         add(card, gbc);
     }
 
-    // ── Ballot-box icon ─────────────────────────────────────────────────
-
     private Icon createBallotIcon() {
         final int size = 56;
         return new Icon() {
             @Override
             public void paintIcon(Component c, Graphics g, int x, int y) {
                 Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                        RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(new Color(0x3B, 0x82, 0xF6, 0x20));
                 g2.fillOval(x, y, size, size);
                 g2.setColor(new Color(0x3B, 0x82, 0xF6, 0x40));
                 g2.fillOval(x + 8, y + 8, size - 16, size - 16);
                 g2.setColor(UIConstants.PRIMARY_BLUE);
-                g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND,
-                        BasicStroke.JOIN_ROUND));
+                g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 int bx = x + 16, by = y + 18, bw = 24, bh = 20;
                 g2.drawRoundRect(bx, by, bw, bh, 3, 3);
                 g2.drawLine(bx + 8, by, bx + 16, by);
                 g2.drawLine(bx + 8, by - 2, bx + 16, by - 2);
                 g2.setColor(UIConstants.TEXT_PRIMARY);
-                g2.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_ROUND,
-                        BasicStroke.JOIN_ROUND));
+                g2.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 int px = bx + 10, py = by - 8;
                 g2.drawRect(px, py, 8, 10);
                 g2.setColor(UIConstants.PRIMARY_BLUE);
-                g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND,
-                        BasicStroke.JOIN_ROUND));
+                g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 g2.drawLine(px + 2, py + 5, px + 3, py + 7);
                 g2.drawLine(px + 3, py + 7, px + 6, py + 3);
                 g2.dispose();
@@ -938,13 +887,12 @@ class HomePanel extends JPanel {
     }
 }
 
-class PreviousElectionActionPanel extends JPanel
-        implements VotingAppFrame.Refreshable {
+class PreviousElectionActionPanel extends JPanel implements VotingAppFrame.Refreshable {
 
     private final VotingAppFrame frame;
-    private JLabel  nameLabel;
-    private JLabel  idLabel;
-    private JLabel  statusLabel;
+    private JLabel nameLabel;
+    private JLabel idLabel;
+    private JLabel statusLabel;
 
     public PreviousElectionActionPanel(VotingAppFrame frame) {
         this.frame = frame;
@@ -955,18 +903,15 @@ class PreviousElectionActionPanel extends JPanel
     }
 
     private void buildUI() {
-        // ── Header ──────────────────────────────────────────────────────
         JPanel header = UIConstants.createHeaderPanel(
                 "Selected Election", "← Back",
                 () -> frame.showScreen(VotingAppFrame.SCREEN_PREVIOUS_ELECTIONS));
         add(header, BorderLayout.NORTH);
 
-        // ── Center ──────────────────────────────────────────────────────
         JPanel center = new JPanel();
         center.setOpaque(false);
         center.setLayout(new BoxLayout(center, BoxLayout.Y_AXIS));
 
-        // Info card
         JPanel infoCard = new UIConstants.RoundedPanel(12, UIConstants.BG_CARD);
         infoCard.setLayout(new BoxLayout(infoCard, BoxLayout.Y_AXIS));
         infoCard.setBorder(BorderFactory.createEmptyBorder(24, 24, 24, 24));
@@ -982,12 +927,11 @@ class PreviousElectionActionPanel extends JPanel
 
         JPanel statusRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         statusRow.setOpaque(false);
-        
+
         idLabel = new JLabel("ID: ");
         idLabel.setFont(UIConstants.FONT_BODY);
         idLabel.setForeground(UIConstants.TEXT_SECONDARY);
         statusRow.add(idLabel);
-        
         statusRow.add(Box.createHorizontalStrut(16));
 
         JLabel statusText = new JLabel("Status:");
@@ -998,14 +942,12 @@ class PreviousElectionActionPanel extends JPanel
         statusLabel = new JLabel("COMPLETED");
         statusLabel.setFont(UIConstants.FONT_BODY);
         statusRow.add(statusLabel);
-
         statusRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         infoCard.add(statusRow);
 
         center.add(infoCard);
         center.add(Box.createVerticalStrut(32));
 
-        // Action grid (3 rows × 2 cols)
         JPanel grid = new JPanel(new GridLayout(3, 2, 16, 16));
         grid.setOpaque(false);
         grid.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -1050,19 +992,16 @@ class PreviousElectionActionPanel extends JPanel
         center.add(grid);
         add(center, BorderLayout.CENTER);
     }
-    
+
     private void exportSelection() {
         VotingManager manager = frame.getCurrentManager();
         if (manager == null) return;
-        
         try {
             JFileChooser fc = new JFileChooser();
             fc.setSelectedFile(new File("election_results_" + manager.getElectionId() + ".txt"));
-            int result = fc.showSaveDialog(frame);
-            if (result == JFileChooser.APPROVE_OPTION) {
+            if (fc.showSaveDialog(frame) == JFileChooser.APPROVE_OPTION) {
                 manager.exportResults(fc.getSelectedFile().getAbsolutePath());
-                JOptionPane.showMessageDialog(frame,
-                        "Results exported successfully!",
+                JOptionPane.showMessageDialog(frame, "Results exported successfully!",
                         "Export Complete", JOptionPane.INFORMATION_MESSAGE);
             }
         } catch (SQLException | IOException ex) {
@@ -1071,40 +1010,28 @@ class PreviousElectionActionPanel extends JPanel
         }
     }
 
-    // ── Refreshable ─────────────────────────────────────────────────────
-
     @Override
     public void refresh() {
         ElectionDAO.ElectionRecord record = frame.getCurrentRecord();
         if (record == null) return;
-
         nameLabel.setText(record.name);
         idLabel.setText("ID: " + record.electionId);
         statusLabel.setText(record.status);
-        
         switch (record.status) {
-            case "UPCOMING":
-                statusLabel.setForeground(UIConstants.STATUS_UPCOMING);
-                break;
-            case "ACTIVE":
-                statusLabel.setForeground(UIConstants.STATUS_ACTIVE);
-                break;
-            default:
-                statusLabel.setForeground(UIConstants.STATUS_COMPLETED);
-                break;
+            case "UPCOMING":  statusLabel.setForeground(UIConstants.STATUS_UPCOMING); break;
+            case "ACTIVE":    statusLabel.setForeground(UIConstants.STATUS_ACTIVE); break;
+            default:          statusLabel.setForeground(UIConstants.STATUS_COMPLETED); break;
         }
     }
 }
 
-class PreviousElectionsPanel extends JPanel
-        implements VotingAppFrame.Refreshable {
+class PreviousElectionsPanel extends JPanel implements VotingAppFrame.Refreshable {
 
     private final VotingAppFrame frame;
     private DefaultTableModel    tableModel;
     private JTable               table;
     private final ElectionDAO    electionDAO = new ElectionDAO();
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-
     private JButton selectBtn;
 
     public PreviousElectionsPanel(VotingAppFrame frame) {
@@ -1116,8 +1043,7 @@ class PreviousElectionsPanel extends JPanel
     }
 
     private void buildUI() {
-        JPanel header = UIConstants.createHeaderPanel(
-                "Previous Elections", null, null);
+        JPanel header = UIConstants.createHeaderPanel("Previous Elections", null, null);
         add(header, BorderLayout.NORTH);
 
         tableModel = new DefaultTableModel(
@@ -1132,10 +1058,8 @@ class PreviousElectionsPanel extends JPanel
         table.getColumnModel().getColumn(3).setPreferredWidth(100);
         add(UIConstants.wrapInScrollPane(table), BorderLayout.CENTER);
 
-        table.getSelectionModel().addListSelectionListener(e -> {
-            boolean selected = table.getSelectedRow() >= 0;
-            selectBtn.setEnabled(selected);
-        });
+        table.getSelectionModel().addListSelectionListener(e ->
+                selectBtn.setEnabled(table.getSelectedRow() >= 0));
 
         JPanel bottom = new JPanel(new BorderLayout());
         bottom.setOpaque(false);
@@ -1168,7 +1092,7 @@ class PreviousElectionsPanel extends JPanel
             if (record != null) {
                 frame.setCurrentRecord(record);
                 frame.setCurrentManager(new VotingManager(electionId));
-                frame.showScreen(VotingAppFrame.SCREEN_PREVIOUS_ELECTION_ACTION);
+                frame.showScreen(VotingAppFrame.SCREEN_ELECTION_DETAILS);
             }
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(frame, "Database error: " + ex.getMessage(),
@@ -1180,8 +1104,7 @@ class PreviousElectionsPanel extends JPanel
     public void refresh() {
         tableModel.setRowCount(0);
         try {
-            List<ElectionDAO.ElectionRecord> allElections = electionDAO.getAllElections();
-            for (ElectionDAO.ElectionRecord rec : allElections) {
+            for (ElectionDAO.ElectionRecord rec : electionDAO.getAllElections()) {
                 tableModel.addRow(new Object[]{
                         rec.electionId, rec.name,
                         rec.endTime != null ? rec.endTime.format(FMT) : "N/A",
@@ -1189,7 +1112,7 @@ class PreviousElectionsPanel extends JPanel
                 });
             }
         } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(frame, "Error loading completed elections: " + ex.getMessage(),
+            JOptionPane.showMessageDialog(frame, "Error loading elections: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -1245,9 +1168,7 @@ class ReElectionPanel extends JPanel implements VotingAppFrame.Refreshable {
         cancelBtn.setPreferredSize(new Dimension(120, 44));
         cancelBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_PREVIOUS_ELECTIONS));
         btnRow.add(cancelBtn);
-
         btnRow.add(createBtn);
-
         card.add(btnRow);
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -1263,11 +1184,7 @@ class ReElectionPanel extends JPanel implements VotingAppFrame.Refreshable {
 
         String name = nameField.getText().trim();
         String durStr = durationField.getText().trim();
-
-        if (name.isEmpty()) {
-            warn("Election name cannot be empty.");
-            return;
-        }
+        if (name.isEmpty()) { warn("Election name cannot be empty."); return; }
         int duration;
         try {
             duration = Integer.parseInt(durStr);
@@ -1276,22 +1193,18 @@ class ReElectionPanel extends JPanel implements VotingAppFrame.Refreshable {
             warn("Please enter a valid positive number for duration.");
             return;
         }
-
         try {
             if (new ElectionDAO().findByName(name) != null) {
                 warn("An election with this name already exists.");
                 return;
             }
-
             VotingManager manager = new VotingManager(name, duration, parentRecord.electionId);
             frame.setCurrentManager(manager);
             frame.setCurrentRecord(new ElectionDAO().findById(manager.getElectionId()));
-
             JOptionPane.showMessageDialog(frame,
                     String.format("Re-election '%s' created successfully! (ID: %d)",
                             name, manager.getElectionId()),
                     "Success", JOptionPane.INFORMATION_MESSAGE);
-
             frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT);
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(frame, "Database error: " + ex.getMessage(),
@@ -1306,15 +1219,12 @@ class ReElectionPanel extends JPanel implements VotingAppFrame.Refreshable {
     @Override
     public void refresh() {
         ElectionDAO.ElectionRecord record = frame.getCurrentRecord();
-        if (record != null) {
-            nameField.setText(record.name + " (Re-election)");
-        }
+        if (record != null) nameField.setText(record.name + " (Re-election)");
         durationField.setText("");
     }
 }
 
-class ResultsPanel extends JPanel
-        implements VotingAppFrame.Refreshable {
+class ResultsPanel extends JPanel implements VotingAppFrame.Refreshable {
 
     private final VotingAppFrame frame;
     private DefaultTableModel    tableModel;
@@ -1332,21 +1242,15 @@ class ResultsPanel extends JPanel
         buildUI();
     }
 
-    public void setReturnScreen(String screen) {
-        this.returnScreen = screen;
-    }
+    public void setReturnScreen(String screen) { this.returnScreen = screen; }
 
     private void buildUI() {
-        // Header
-        JPanel header = UIConstants.createHeaderPanel(
-                "Election Results", null, null);
+        JPanel header = UIConstants.createHeaderPanel("Election Results", null, null);
         add(header, BorderLayout.NORTH);
 
-        // Center
         JPanel center = new JPanel(new BorderLayout(0, 16));
         center.setOpaque(false);
 
-        // Table
         tableModel = new DefaultTableModel(
                 new String[]{"ID", "Candidate", "Party", "Votes"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
@@ -1358,7 +1262,6 @@ class ResultsPanel extends JPanel
         table.getColumnModel().getColumn(3).setPreferredWidth(80);
         center.add(UIConstants.wrapInScrollPane(table), BorderLayout.CENTER);
 
-        // Stats row
         JPanel statsRow = new JPanel(new GridLayout(1, 4, 16, 0));
         statsRow.setOpaque(false);
         statsRow.setPreferredSize(new Dimension(0, 70));
@@ -1376,7 +1279,6 @@ class ResultsPanel extends JPanel
         center.add(statsRow, BorderLayout.SOUTH);
         add(center, BorderLayout.CENTER);
 
-        // Bottom buttons
         JPanel bottom = new JPanel(new BorderLayout());
         bottom.setOpaque(false);
         bottom.setBorder(BorderFactory.createEmptyBorder(16, 0, 0, 0));
@@ -1410,34 +1312,24 @@ class ResultsPanel extends JPanel
         valueLabel.setForeground(UIConstants.TEXT_PRIMARY);
         valueLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         card.add(valueLabel);
-
         return card;
     }
-
-    // ── Export ───────────────────────────────────────────────────────────
 
     private void exportResults() {
         VotingManager manager = frame.getCurrentManager();
         if (manager == null) return;
-
         JFileChooser fc = new JFileChooser();
         fc.setSelectedFile(new File("election_results.txt"));
-        int result = fc.showSaveDialog(frame);
-        if (result != JFileChooser.APPROVE_OPTION) return;
-
+        if (fc.showSaveDialog(frame) != JFileChooser.APPROVE_OPTION) return;
         try {
             manager.exportResults(fc.getSelectedFile().getAbsolutePath());
-            JOptionPane.showMessageDialog(frame,
-                    "Results exported successfully!",
+            JOptionPane.showMessageDialog(frame, "Results exported successfully!",
                     "Export Complete", JOptionPane.INFORMATION_MESSAGE);
         } catch (IOException | SQLException ex) {
-            JOptionPane.showMessageDialog(frame,
-                    "Export failed: " + ex.getMessage(),
+            JOptionPane.showMessageDialog(frame, "Export failed: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
-
-    // ── Refreshable ─────────────────────────────────────────────────────
 
     @Override
     public void refresh() {
@@ -1448,12 +1340,10 @@ class ResultsPanel extends JPanel
         try {
             Map<String, Long> tally = manager.getTallyMap();
             Map<String, Candidate> candidates = new LinkedHashMap<>();
-            for (Candidate c : manager.getCandidates()) {
+            for (Candidate c : manager.getCandidates())
                 candidates.put(c.getCandidateId(), c);
-            }
 
-            long totalVotes  = tally.values().stream()
-                    .mapToLong(Long::longValue).sum();
+            long totalVotes  = tally.values().stream().mapToLong(Long::longValue).sum();
             int  totalVoters = manager.getVoters().size();
 
             for (Map.Entry<String, Long> entry : tally.entrySet()) {
@@ -1469,10 +1359,8 @@ class ResultsPanel extends JPanel
             totalVotesLabel.setText(String.valueOf(totalVotes));
             registeredVotersLabel.setText(String.valueOf(totalVoters));
             turnoutLabel.setText(totalVoters == 0 ? "N/A"
-                    : String.format("%.1f%%",
-                            100.0 * totalVotes / totalVoters));
+                    : String.format("%.1f%%", 100.0 * totalVotes / totalVoters));
 
-            // Determine winner
             if (!tally.isEmpty()) {
                 long maxVotes = tally.values().iterator().next();
                 List<String> winners = tally.entrySet().stream()
@@ -1483,19 +1371,16 @@ class ResultsPanel extends JPanel
                     Candidate w = candidates.get(winners.get(0));
                     winnerLabel.setText(w != null ? w.getName() : "-");
                 } else {
-                    String tied = winners.stream()
+                    winnerLabel.setText("TIE: " + winners.stream()
                             .map(id -> candidates.containsKey(id)
                                     ? candidates.get(id).getName() : id)
-                            .collect(Collectors.joining(", "));
-                    winnerLabel.setText("TIE: " + tied);
+                            .collect(Collectors.joining(", ")));
                 }
             } else {
                 winnerLabel.setText("-");
             }
-
         } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(frame,
-                    "Error loading results: " + ex.getMessage(),
+            JOptionPane.showMessageDialog(frame, "Error loading results: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -1505,8 +1390,7 @@ final class UIConstants {
 
     private UIConstants() {}
 
-    // ── Colors ──────────────────────────────────────────────────────────
-
+    // Colors
     public static final Color BG_DARK        = new Color(0x12, 0x14, 0x1D);
     public static final Color BG_CARD        = new Color(0x1A, 0x1D, 0x2B);
     public static final Color BG_FIELD       = new Color(0x22, 0x25, 0x36);
@@ -1527,8 +1411,7 @@ final class UIConstants {
     public static final Color TABLE_ROW_ALT  = new Color(0x16, 0x18, 0x24);
     public static final Color TABLE_GRID     = new Color(0x2A, 0x2D, 0x3E);
 
-    // ── Fonts ───────────────────────────────────────────────────────────
-
+    // Fonts
     public static final Font FONT_TITLE        = new Font("Segoe UI", Font.BOLD,  28);
     public static final Font FONT_HEADER       = new Font("Segoe UI", Font.BOLD,  22);
     public static final Font FONT_SUBTITLE     = new Font("Segoe UI", Font.PLAIN, 14);
@@ -1542,10 +1425,6 @@ final class UIConstants {
     public static final Font FONT_STAT_VALUE   = new Font("Segoe UI", Font.BOLD,  18);
     public static final Font FONT_STAT_LABEL   = new Font("Segoe UI", Font.PLAIN, 11);
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  Button Factories
-    // ═══════════════════════════════════════════════════════════════════
-
     public static JButton createPrimaryButton(String text) {
         return new StyledButton(text, PRIMARY_BLUE, PRIMARY_HOVER, Color.WHITE);
     }
@@ -1558,11 +1437,6 @@ final class UIConstants {
         return new StyledButton(text, DANGER_RED, DANGER_HOVER, Color.WHITE);
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  Field / Label Factories
-    // ═══════════════════════════════════════════════════════════════════
-
-    /** Creates a dark-themed text field with rounded border. */
     public static JTextField createStyledField() {
         JTextField field = new JTextField();
         field.setFont(FONT_FIELD);
@@ -1577,7 +1451,6 @@ final class UIConstants {
         return field;
     }
 
-    /** Small bold label used above form fields. */
     public static JLabel createFieldLabel(String text) {
         JLabel label = new JLabel(text);
         label.setFont(FONT_LABEL);
@@ -1586,7 +1459,6 @@ final class UIConstants {
         return label;
     }
 
-    /** Muted supporting text. */
     public static JLabel createMutedLabel(String text) {
         JLabel label = new JLabel(text);
         label.setFont(FONT_SMALL);
@@ -1595,11 +1467,6 @@ final class UIConstants {
         return label;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  Table Factory
-    // ═══════════════════════════════════════════════════════════════════
-
-    /** Creates a styled, non-editable JTable with alternating dark rows. */
     public static JTable createStyledTable(DefaultTableModel model) {
         JTable table = new JTable(model);
         table.setFont(FONT_TABLE);
@@ -1621,25 +1488,21 @@ final class UIConstants {
         header.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, TABLE_GRID));
         header.setReorderingAllowed(false);
 
-        // Alternating-row renderer (default for Object.class)
         table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object val,
                     boolean selected, boolean focused, int row, int col) {
                 super.getTableCellRendererComponent(t, val, selected, focused, row, col);
-                if (!selected) {
+                if (!selected)
                     setBackground(row % 2 == 0 ? BG_DARK : TABLE_ROW_ALT);
-                }
                 setForeground(TEXT_PRIMARY);
                 setBorder(BorderFactory.createEmptyBorder(0, 12, 0, 12));
                 return this;
             }
         });
-
         return table;
     }
 
-    /** Wraps a JTable in a dark-bordered scroll pane. */
     public static JScrollPane wrapInScrollPane(JTable table) {
         JScrollPane sp = new JScrollPane(table);
         sp.setBorder(BorderFactory.createLineBorder(TABLE_GRID));
@@ -1647,17 +1510,7 @@ final class UIConstants {
         return sp;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  Header Panel
-    // ═══════════════════════════════════════════════════════════════════
-
-    /**
-     * Creates a standard screen header with a title on the left
-     * and an optional back-link on the right.
-     */
-    public static JPanel createHeaderPanel(String title,
-                                           String backText,
-                                           Runnable onBack) {
+    public static JPanel createHeaderPanel(String title, String backText, Runnable onBack) {
         JPanel header = new JPanel(new BorderLayout());
         header.setOpaque(false);
         header.setBorder(BorderFactory.createEmptyBorder(0, 0, 20, 0));
@@ -1677,24 +1530,14 @@ final class UIConstants {
             backBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             backBtn.addActionListener(e -> onBack.run());
             backBtn.addMouseListener(new MouseAdapter() {
-                @Override public void mouseEntered(MouseEvent e) {
-                    backBtn.setForeground(TEXT_PRIMARY);
-                }
-                @Override public void mouseExited(MouseEvent e) {
-                    backBtn.setForeground(TEXT_SECONDARY);
-                }
+                @Override public void mouseEntered(MouseEvent e) { backBtn.setForeground(TEXT_PRIMARY); }
+                @Override public void mouseExited(MouseEvent e)  { backBtn.setForeground(TEXT_SECONDARY); }
             });
             header.add(backBtn, BorderLayout.EAST);
         }
-
         return header;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  Layout Helpers
-    // ═══════════════════════════════════════════════════════════════════
-
-    /** Wraps a button in a panel that stretches it horizontally. */
     public static JPanel wrapButton(JButton button, int height) {
         JPanel wrapper = new JPanel(new BorderLayout());
         wrapper.setOpaque(false);
@@ -1704,16 +1547,9 @@ final class UIConstants {
         return wrapper;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  Reusable Custom Components
-    // ═══════════════════════════════════════════════════════════════════
-
-    /**
-     * A panel with rounded corners and a solid background color.
-     */
     public static class RoundedPanel extends JPanel {
-        private final int    radius;
-        private final Color  bgColor;
+        private final int   radius;
+        private final Color bgColor;
 
         public RoundedPanel(int radius, Color bgColor) {
             this.radius  = radius;
@@ -1724,35 +1560,26 @@ final class UIConstants {
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                    RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(bgColor);
-            g2.fill(new RoundRectangle2D.Float(
-                    0, 0, getWidth(), getHeight(), radius, radius));
-            // Subtle border
+            g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), radius, radius));
             g2.setColor(new Color(0xFF, 0xFF, 0xFF, 0x08));
             g2.setStroke(new BasicStroke(1f));
-            g2.draw(new RoundRectangle2D.Float(
-                    0.5f, 0.5f, getWidth() - 1, getHeight() - 1, radius, radius));
+            g2.draw(new RoundRectangle2D.Float(0.5f, 0.5f, getWidth() - 1, getHeight() - 1, radius, radius));
             g2.dispose();
             super.paintComponent(g);
         }
     }
 
-    /**
-     * A styled button with rounded corners and hover color change.
-     */
     public static class StyledButton extends JButton {
         private final Color normalBg;
         private final Color hoverBg;
         private boolean hovering = false;
 
-        public StyledButton(String text, Color normalBg, Color hoverBg,
-                            Color textColor) {
+        public StyledButton(String text, Color normalBg, Color hoverBg, Color textColor) {
             super(text);
             this.normalBg = normalBg;
             this.hoverBg  = hoverBg;
-
             setFont(FONT_BUTTON);
             setForeground(textColor);
             setFocusPainted(false);
@@ -1761,31 +1588,22 @@ final class UIConstants {
             setOpaque(false);
             setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             setPreferredSize(new Dimension(0, 44));
-
             addMouseListener(new MouseAdapter() {
-                @Override public void mouseEntered(MouseEvent e) {
-                    hovering = true;  repaint();
-                }
-                @Override public void mouseExited(MouseEvent e) {
-                    hovering = false; repaint();
-                }
+                @Override public void mouseEntered(MouseEvent e) { hovering = true;  repaint(); }
+                @Override public void mouseExited(MouseEvent e)  { hovering = false; repaint(); }
             });
         }
 
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                    RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(hovering ? hoverBg : normalBg);
-            g2.fill(new RoundRectangle2D.Float(
-                    0, 0, getWidth(), getHeight(), 10, 10));
-            // Border for secondary (dark) buttons
+            g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 10, 10));
             if (normalBg.equals(BTN_DARK)) {
                 g2.setColor(BTN_BORDER);
                 g2.setStroke(new BasicStroke(1f));
-                g2.draw(new RoundRectangle2D.Float(
-                        0.5f, 0.5f, getWidth() - 1, getHeight() - 1, 10, 10));
+                g2.draw(new RoundRectangle2D.Float(0.5f, 0.5f, getWidth() - 1, getHeight() - 1, 10, 10));
             }
             g2.dispose();
             super.paintComponent(g);
@@ -1793,8 +1611,231 @@ final class UIConstants {
     }
 }
 
-class VotersPanel extends JPanel
-        implements VotingAppFrame.Refreshable {
+class ImportVoterPanel extends JPanel {
+
+    private final VotingAppFrame frame;
+    private DefaultTableModel previewModel;
+    private JLabel summaryLabel;
+    private JButton importBtn;
+    private final List<Voter> parsedVoters = new ArrayList<>();
+
+    public ImportVoterPanel(VotingAppFrame frame) {
+        this.frame = frame;
+        setBackground(UIConstants.BG_DARK);
+        setLayout(new BorderLayout());
+        setBorder(BorderFactory.createEmptyBorder(40, 60, 40, 60));
+        buildUI();
+    }
+
+    private void buildUI() {
+        JPanel header = UIConstants.createHeaderPanel(
+                "Import Voter List", "← Back",
+                () -> frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT));
+        add(header, BorderLayout.NORTH);
+
+        JPanel center = new JPanel();
+        center.setOpaque(false);
+        center.setLayout(new BorderLayout(0, 16));
+
+        JPanel topArea = new JPanel();
+        topArea.setOpaque(false);
+        topArea.setLayout(new BoxLayout(topArea, BoxLayout.Y_AXIS));
+
+        JLabel instructions = new JLabel("Select a CSV file with columns: Roll Number, Name");
+        instructions.setFont(UIConstants.FONT_BODY);
+        instructions.setForeground(UIConstants.TEXT_SECONDARY);
+        instructions.setAlignmentX(Component.LEFT_ALIGNMENT);
+        topArea.add(instructions);
+        topArea.add(Box.createVerticalStrut(12));
+
+        JButton chooseBtn = UIConstants.createSecondaryButton("Choose CSV File…");
+        chooseBtn.setPreferredSize(new Dimension(200, 40));
+        chooseBtn.setMaximumSize(new Dimension(200, 40));
+        chooseBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+        chooseBtn.addActionListener(e -> chooseFile());
+        topArea.add(chooseBtn);
+        topArea.add(Box.createVerticalStrut(12));
+
+        summaryLabel = new JLabel(" ");
+        summaryLabel.setFont(UIConstants.FONT_BODY);
+        summaryLabel.setForeground(UIConstants.TEXT_PRIMARY);
+        summaryLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        topArea.add(summaryLabel);
+        topArea.add(Box.createVerticalStrut(8));
+
+        center.add(topArea, BorderLayout.NORTH);
+
+        previewModel = new DefaultTableModel(new String[]{"Roll No.", "Name"}, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        JTable previewTable = UIConstants.createStyledTable(previewModel);
+        previewTable.getColumnModel().getColumn(0).setPreferredWidth(120);
+        previewTable.getColumnModel().getColumn(1).setPreferredWidth(400);
+        center.add(UIConstants.wrapInScrollPane(previewTable), BorderLayout.CENTER);
+
+        add(center, BorderLayout.CENTER);
+
+        JPanel bottom = new JPanel(new BorderLayout());
+        bottom.setOpaque(false);
+        bottom.setBorder(BorderFactory.createEmptyBorder(16, 0, 0, 0));
+
+        JButton cancelBtn = UIConstants.createSecondaryButton("Cancel");
+        cancelBtn.setPreferredSize(new Dimension(120, 44));
+        cancelBtn.addActionListener(e -> {
+            clearState();
+            frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT);
+        });
+        bottom.add(cancelBtn, BorderLayout.WEST);
+
+        importBtn = UIConstants.createPrimaryButton("Import");
+        importBtn.setPreferredSize(new Dimension(160, 44));
+        importBtn.setEnabled(false);
+        importBtn.addActionListener(e -> doImport());
+        bottom.add(importBtn, BorderLayout.EAST);
+
+        add(bottom, BorderLayout.SOUTH);
+    }
+
+    private void chooseFile() {
+        JFileChooser fc = new JFileChooser();
+        fc.setDialogTitle("Select Voter CSV File");
+        fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+                "CSV Files (*.csv)", "csv"));
+        if (fc.showOpenDialog(frame) == JFileChooser.APPROVE_OPTION)
+            parseCsv(fc.getSelectedFile());
+    }
+
+    private void parseCsv(File file) {
+        parsedVoters.clear();
+        previewModel.setRowCount(0);
+        importBtn.setEnabled(false);
+        summaryLabel.setText(" ");
+
+        List<String> errors = new ArrayList<>();
+
+        try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(file))) {
+            String headerLine = br.readLine();
+            if (headerLine == null) { showError("The CSV file is empty."); return; }
+
+            String[] headers = headerLine.split(",", -1);
+            if (headers.length < 2) {
+                showError("CSV header must have at least two columns: Roll Number, Name");
+                return;
+            }
+            String col0 = headers[0].trim().toLowerCase().replaceAll("[^a-z0-9]", "");
+            String col1 = headers[1].trim().toLowerCase().replaceAll("[^a-z0-9]", "");
+            if (!(col0.contains("roll") || col0.contains("id") || col0.contains("number"))
+                    || !(col1.contains("name"))) {
+                showError("CSV header must contain 'Roll Number' and 'Name' columns.\n"
+                        + "Found: \"" + headers[0].trim() + "\", \"" + headers[1].trim() + "\"");
+                return;
+            }
+
+            String line;
+            int lineNum = 1;
+            while ((line = br.readLine()) != null) {
+                lineNum++;
+                String trimmed = line.trim();
+                if (trimmed.isEmpty()) continue;
+
+                String[] parts = trimmed.split(",", -1);
+                if (parts.length < 2) {
+                    errors.add("Line " + lineNum + ": not enough columns.");
+                    continue;
+                }
+
+                String rollStr = parts[0].trim();
+                String name    = parts[1].trim();
+
+                int rollNo;
+                try {
+                    rollNo = Integer.parseInt(rollStr);
+                    if (rollNo <= 0) {
+                        errors.add("Line " + lineNum + ": Roll Number must be positive (\""
+                                + rollStr + "\").");
+                        continue;
+                    }
+                } catch (NumberFormatException e) {
+                    errors.add("Line " + lineNum + ": Invalid Roll Number (\""
+                            + rollStr + "\").");
+                    continue;
+                }
+
+                if (name.isEmpty()) {
+                    errors.add("Line " + lineNum + ": Name is empty.");
+                    continue;
+                }
+
+                parsedVoters.add(new Voter(String.valueOf(rollNo), name));
+                previewModel.addRow(new Object[]{ rollNo, name });
+            }
+        } catch (java.io.IOException ex) {
+            showError("Cannot read file: " + ex.getMessage());
+            return;
+        }
+
+        if (!errors.isEmpty()) {
+            StringBuilder sb = new StringBuilder("Some rows were skipped:\n\n");
+            int shown = Math.min(errors.size(), 10);
+            for (int i = 0; i < shown; i++)
+                sb.append("• ").append(errors.get(i)).append("\n");
+            if (errors.size() > 10)
+                sb.append("… and ").append(errors.size() - 10).append(" more.\n");
+            if (!parsedVoters.isEmpty())
+                sb.append("\n").append(parsedVoters.size()).append(" valid voter(s) are shown in the preview.");
+            JOptionPane.showMessageDialog(frame, sb.toString(),
+                    "CSV Warnings", JOptionPane.WARNING_MESSAGE);
+        }
+
+        if (parsedVoters.isEmpty()) {
+            summaryLabel.setText("No valid voters found in the file.");
+            importBtn.setEnabled(false);
+        } else {
+            summaryLabel.setText(parsedVoters.size() + " voter(s) found.");
+            importBtn.setEnabled(true);
+        }
+    }
+
+    private void doImport() {
+        VotingManager manager = frame.getCurrentManager();
+        if (manager == null || parsedVoters.isEmpty()) return;
+        try {
+            int[] counts = manager.importVoters(parsedVoters);
+            int enrolled = parsedVoters.size() - counts[2];
+
+            StringBuilder msg = new StringBuilder("Import complete!\n\n");
+            msg.append("• ").append(enrolled).append(" voter(s) enrolled in this election.\n");
+            if (counts[0] > 0)
+                msg.append("• ").append(counts[0]).append(" new voter(s) registered.\n");
+            if (counts[1] > 0)
+                msg.append("• ").append(counts[1]).append(" voter(s) already existed (reused).\n");
+            if (counts[2] > 0)
+                msg.append("• ").append(counts[2]).append(" voter(s) were already in this election (skipped).\n");
+
+            JOptionPane.showMessageDialog(frame, msg.toString(),
+                    "Import Successful", JOptionPane.INFORMATION_MESSAGE);
+            clearState();
+            frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT);
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(frame,
+                    "Database error during import: " + ex.getMessage(),
+                    "Import Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void clearState() {
+        parsedVoters.clear();
+        previewModel.setRowCount(0);
+        importBtn.setEnabled(false);
+        summaryLabel.setText(" ");
+    }
+
+    private void showError(String msg) {
+        JOptionPane.showMessageDialog(frame, msg, "CSV Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
+
+class VotersPanel extends JPanel implements VotingAppFrame.Refreshable {
 
     private final VotingAppFrame frame;
     private DefaultTableModel    tableModel;
@@ -1809,17 +1850,14 @@ class VotersPanel extends JPanel
         buildUI();
     }
 
-    public void setReturnScreen(String screen) {
-        this.returnScreen = screen;
-    }
+    public void setReturnScreen(String screen) { this.returnScreen = screen; }
 
     private void buildUI() {
         JPanel header = UIConstants.createHeaderPanel("Voters", "← Back",
                 () -> frame.showScreen(returnScreen));
         add(header, BorderLayout.NORTH);
 
-        tableModel = new DefaultTableModel(
-                new String[]{"ID", "Voter", "Status"}, 0) {
+        tableModel = new DefaultTableModel(new String[]{"ID", "Voter", "Status"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         table = UIConstants.createStyledTable(tableModel);
@@ -1827,23 +1865,16 @@ class VotersPanel extends JPanel
         table.getColumnModel().getColumn(1).setPreferredWidth(300);
         table.getColumnModel().getColumn(2).setPreferredWidth(150);
 
-        // Color-code the Status column
-        table.getColumnModel().getColumn(2).setCellRenderer(
-                new DefaultTableCellRenderer() {
+        table.getColumnModel().getColumn(2).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object val,
                     boolean sel, boolean focus, int row, int col) {
                 super.getTableCellRendererComponent(t, val, sel, focus, row, col);
                 String status = val != null ? val.toString() : "";
-                if (status.startsWith("Voted")) {
-                    setForeground(UIConstants.ACCENT_GREEN);
-                } else {
-                    setForeground(UIConstants.TEXT_SECONDARY);
-                }
-                if (!sel) {
-                    setBackground(row % 2 == 0
-                            ? UIConstants.BG_DARK : UIConstants.TABLE_ROW_ALT);
-                }
+                setForeground(status.startsWith("Voted")
+                        ? UIConstants.ACCENT_GREEN : UIConstants.TEXT_SECONDARY);
+                if (!sel)
+                    setBackground(row % 2 == 0 ? UIConstants.BG_DARK : UIConstants.TABLE_ROW_ALT);
                 setBorder(BorderFactory.createEmptyBorder(0, 12, 0, 12));
                 return this;
             }
@@ -1856,26 +1887,19 @@ class VotersPanel extends JPanel
     public void refresh() {
         tableModel.setRowCount(0);
         if (frame.getCurrentManager() == null) return;
-
         try {
-            // Build set of voter IDs who have voted (via VotingManager)
             List<Vote> votes = frame.getCurrentManager().getVotes();
             Set<String> votedIds = new HashSet<>();
-            for (Vote v : votes) {
-                votedIds.add(v.getVoter().getVoterId());
-            }
+            for (Vote v : votes) votedIds.add(v.getVoter().getVoterId());
 
-            Collection<Voter> voters = frame.getCurrentManager().getVoters();
-            for (Voter v : voters) {
-                String status = votedIds.contains(v.getVoterId())
-                        ? "Voted \u2713" : "Not Voted";
+            for (Voter v : frame.getCurrentManager().getVoters()) {
                 tableModel.addRow(new Object[]{
-                        v.getVoterId(), v.getName(), status
+                        v.getVoterId(), v.getName(),
+                        votedIds.contains(v.getVoterId()) ? "Voted \u2713" : "Not Voted"
                 });
             }
         } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(frame,
-                    "Error loading voters: " + ex.getMessage(),
+            JOptionPane.showMessageDialog(frame, "Error loading voters: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -1883,13 +1907,13 @@ class VotersPanel extends JPanel
 
 public class VotingAppFrame extends JFrame {
 
-    // ── Screen name constants ───────────────────────────────────────────
     public static final String SCREEN_HOME               = "HOME";
     public static final String SCREEN_ELECTION_SELECT    = "ELECTION_SELECT";
     public static final String SCREEN_CREATE_ELECTION    = "CREATE_ELECTION";
     public static final String SCREEN_ELECTION_MGMT      = "ELECTION_MGMT";
     public static final String SCREEN_ADD_CANDIDATE      = "ADD_CANDIDATE";
     public static final String SCREEN_ADD_VOTER          = "ADD_VOTER";
+    public static final String SCREEN_IMPORT_VOTERS      = "IMPORT_VOTERS";
     public static final String SCREEN_CANDIDATES         = "CANDIDATES";
     public static final String SCREEN_VOTERS             = "VOTERS";
     public static final String SCREEN_VOTING             = "VOTING";
@@ -1899,21 +1923,14 @@ public class VotingAppFrame extends JFrame {
     public static final String SCREEN_RE_ELECTION        = "RE_ELECTION";
     public static final String SCREEN_PREVIOUS_ELECTION_ACTION = "PREVIOUS_ELECTION_ACTION";
 
-    // ── Layout ──────────────────────────────────────────────────────────
     private final CardLayout            cardLayout;
     private final JPanel                cardPanel;
     private final Map<String, JPanel>   screens = new HashMap<>();
 
-    // ── Shared state ────────────────────────────────────────────────────
     private VotingManager               currentManager;
     private ElectionDAO.ElectionRecord  currentRecord;
 
-    /** Panels that implement this are refreshed every time they are shown. */
-    public interface Refreshable {
-        void refresh();
-    }
-
-    // ── Constructor ─────────────────────────────────────────────────────
+    public interface Refreshable { void refresh(); }
 
     public VotingAppFrame() {
         super("Online Voting System");
@@ -1928,13 +1945,13 @@ public class VotingAppFrame extends JFrame {
         cardPanel.setBackground(UIConstants.BG_DARK);
         setContentPane(cardPanel);
 
-        // Register all screens
         addScreen(SCREEN_HOME,               new HomePanel(this));
         addScreen(SCREEN_ELECTION_SELECT,    new ElectionSelectionPanel(this));
         addScreen(SCREEN_CREATE_ELECTION,    new CreateElectionPanel(this));
         addScreen(SCREEN_ELECTION_MGMT,      new ElectionManagementPanel(this));
         addScreen(SCREEN_ADD_CANDIDATE,      new AddCandidatePanel(this));
         addScreen(SCREEN_ADD_VOTER,          new AddVoterPanel(this));
+        addScreen(SCREEN_IMPORT_VOTERS,      new ImportVoterPanel(this));
         addScreen(SCREEN_CANDIDATES,         new CandidatesPanel(this));
         addScreen(SCREEN_VOTERS,             new VotersPanel(this));
         addScreen(SCREEN_VOTING,             new VotingPanel(this));
@@ -1947,37 +1964,27 @@ public class VotingAppFrame extends JFrame {
         showScreen(SCREEN_HOME);
     }
 
-    // ── Screen management ───────────────────────────────────────────────
-
     public void addScreen(String name, JPanel panel) {
         screens.put(name, panel);
         cardPanel.add(panel, name);
     }
 
-    /** Switches to the named screen; refreshes it first if it is {@link Refreshable}. */
     public void showScreen(String name) {
         JPanel panel = screens.get(name);
-        if (panel instanceof Refreshable) {
+        if (panel instanceof Refreshable)
             ((Refreshable) panel).refresh();
-        }
         cardLayout.show(cardPanel, name);
     }
 
-    /** Returns a registered screen panel, cast to the expected type. */
     @SuppressWarnings("unchecked")
     public <T extends JPanel> T getScreen(String name) {
         return (T) screens.get(name);
     }
 
-    // ── Shared-state accessors ──────────────────────────────────────────
-
     public VotingManager getCurrentManager()                      { return currentManager; }
     public void setCurrentManager(VotingManager manager)          { this.currentManager = manager; }
-
     public ElectionDAO.ElectionRecord getCurrentRecord()          { return currentRecord; }
     public void setCurrentRecord(ElectionDAO.ElectionRecord rec)  { this.currentRecord = rec; }
-
-    // ── Entry point ─────────────────────────────────────────────────────
 
     public static void main(String[] args) {
         System.setProperty("awt.useSystemAAFontSettings", "on");
@@ -1985,11 +1992,9 @@ public class VotingAppFrame extends JFrame {
 
         SwingUtilities.invokeLater(() -> {
             try {
-                UIManager.setLookAndFeel(
-                        UIManager.getCrossPlatformLookAndFeelClassName());
+                UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
             } catch (Exception ignored) { }
 
-            // Global dark-theme defaults
             UIManager.put("Panel.background",             UIConstants.BG_DARK);
             UIManager.put("OptionPane.background",        UIConstants.BG_DARK);
             UIManager.put("OptionPane.messageForeground", UIConstants.TEXT_PRIMARY);
@@ -1998,14 +2003,12 @@ public class VotingAppFrame extends JFrame {
             UIManager.put("TextField.foreground",         UIConstants.TEXT_PRIMARY);
             UIManager.put("TextField.caretForeground",    UIConstants.TEXT_PRIMARY);
 
-            VotingAppFrame frame = new VotingAppFrame();
-            frame.setVisible(true);
+            new VotingAppFrame().setVisible(true);
         });
     }
 }
 
-class VotingPanel extends JPanel
-        implements VotingAppFrame.Refreshable {
+class VotingPanel extends JPanel implements VotingAppFrame.Refreshable {
 
     private final VotingAppFrame frame;
     private final ElectionDAO    electionDAO = new ElectionDAO();
@@ -2016,7 +2019,7 @@ class VotingPanel extends JPanel
     private JLabel            statusValueLabel;
     private JLabel            timeRemainingLabel;
     private JLabel            votesCastLabel;
-    private javax.swing.Timer             countdownTimer;
+    private javax.swing.Timer countdownTimer;
 
     public VotingPanel(VotingAppFrame frame) {
         this.frame = frame;
@@ -2026,17 +2029,11 @@ class VotingPanel extends JPanel
         buildUI();
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  UI Construction
-    // ═══════════════════════════════════════════════════════════════════
-
     private void buildUI() {
-        // ── Top section: header + stats ─────────────────────────────────
         JPanel top = new JPanel();
         top.setOpaque(false);
         top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
 
-        // Header row
         JPanel headerRow = new JPanel(new BorderLayout());
         headerRow.setOpaque(false);
         electionNameLabel = new JLabel("Election — Voting");
@@ -2051,12 +2048,10 @@ class VotingPanel extends JPanel
         openBadge.setBackground(new Color(0x12, 0x2E, 0x1A));
         openBadge.setBorder(BorderFactory.createEmptyBorder(4, 10, 4, 10));
         headerRow.add(openBadge, BorderLayout.EAST);
-
         headerRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         top.add(headerRow);
         top.add(Box.createVerticalStrut(20));
 
-        // Stats row
         JPanel statsRow = new JPanel(new GridLayout(1, 3, 16, 0));
         statsRow.setOpaque(false);
         statsRow.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -2072,16 +2067,12 @@ class VotingPanel extends JPanel
 
         top.add(statsRow);
         top.add(Box.createVerticalStrut(20));
-
         add(top, BorderLayout.NORTH);
 
-        // ── Center: candidate table ────────────────────────────────────
         tableModel = new DefaultTableModel(
                 new String[]{"ID", "Candidate", "Party", "Action"}, 0) {
             @Override
-            public boolean isCellEditable(int row, int col) {
-                return col == 3;            // only the Vote button column
-            }
+            public boolean isCellEditable(int row, int col) { return col == 3; }
         };
         table = UIConstants.createStyledTable(tableModel);
         table.getColumnModel().getColumn(0).setPreferredWidth(60);
@@ -2096,11 +2087,10 @@ class VotingPanel extends JPanel
 
         add(UIConstants.wrapInScrollPane(table), BorderLayout.CENTER);
 
-        // ── Bottom buttons ─────────────────────────────────────────────
         JPanel bottom = new JPanel(new BorderLayout());
         bottom.setOpaque(false);
         bottom.setBorder(BorderFactory.createEmptyBorder(16, 0, 0, 0));
-        
+
         JPanel leftNav = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         leftNav.setOpaque(false);
 
@@ -2130,7 +2120,7 @@ class VotingPanel extends JPanel
             frame.showScreen(VotingAppFrame.SCREEN_RESULTS);
         });
         leftNav.add(liveResultsBtn);
-        
+
         bottom.add(leftNav, BorderLayout.WEST);
 
         JPanel rightAction = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
@@ -2139,13 +2129,10 @@ class VotingPanel extends JPanel
         endBtn.setPreferredSize(new Dimension(140, 40));
         endBtn.addActionListener(e -> endVoting());
         rightAction.add(endBtn);
-        
         bottom.add(rightAction, BorderLayout.EAST);
 
         add(bottom, BorderLayout.SOUTH);
     }
-
-    // ── Stat card helper ────────────────────────────────────────────────
 
     private JPanel createStatCard(String label, JLabel valueLabel) {
         JPanel card = new UIConstants.RoundedPanel(8, UIConstants.BG_CARD);
@@ -2163,35 +2150,26 @@ class VotingPanel extends JPanel
         valueLabel.setForeground(UIConstants.TEXT_PRIMARY);
         valueLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         card.add(valueLabel);
-
         return card;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  Actions
-    // ═══════════════════════════════════════════════════════════════════
-
     private void handleVote(String candidateId) {
         String voterId = JOptionPane.showInputDialog(frame,
-                "Enter your Voter ID:",
-                "Cast Vote", JOptionPane.PLAIN_MESSAGE);
+                "Enter your Voter ID:", "Cast Vote", JOptionPane.PLAIN_MESSAGE);
         if (voterId == null || voterId.trim().isEmpty()) return;
 
         VotingManager manager = frame.getCurrentManager();
         if (manager == null) return;
-
         try {
             manager.castVote(voterId.trim(), candidateId);
-            JOptionPane.showMessageDialog(frame,
-                    "Vote submitted successfully!",
+            JOptionPane.showMessageDialog(frame, "Vote submitted successfully!",
                     "Success", JOptionPane.INFORMATION_MESSAGE);
             refreshStats();
         } catch (VotingException ex) {
             JOptionPane.showMessageDialog(frame, ex.getMessage(),
                     "Vote Rejected", JOptionPane.WARNING_MESSAGE);
         } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(frame,
-                    "Database error: " + ex.getMessage(),
+            JOptionPane.showMessageDialog(frame, "Database error: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -2199,35 +2177,24 @@ class VotingPanel extends JPanel
     private void endVoting() {
         Object[] options = {"Cancel", "OK"};
         int confirm = JOptionPane.showOptionDialog(frame,
-                "Are you sure you want to end voting?",
-                "End Voting",
-                JOptionPane.DEFAULT_OPTION,
-                JOptionPane.WARNING_MESSAGE,
-                null,
-                options,
-                options[1]);
+                "Are you sure you want to end voting?", "End Voting",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
+                null, options, options[1]);
         if (confirm != 1) return;
 
         VotingManager manager = frame.getCurrentManager();
         if (manager == null) return;
-
         try {
-            electionDAO.updateStatus(manager.getElectionId(),
-                    ElectionDAO.Status.COMPLETED);
+            electionDAO.updateStatus(manager.getElectionId(), ElectionDAO.Status.COMPLETED);
             stopTimer();
             ResultsPanel rp = frame.getScreen(VotingAppFrame.SCREEN_RESULTS);
             rp.setReturnScreen(VotingAppFrame.SCREEN_HOME);
             frame.showScreen(VotingAppFrame.SCREEN_RESULTS);
         } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(frame,
-                    "Error ending voting: " + ex.getMessage(),
+            JOptionPane.showMessageDialog(frame, "Error ending voting: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════════
-    //  Timer
-    // ═══════════════════════════════════════════════════════════════════
 
     private void startTimer() {
         stopTimer();
@@ -2245,33 +2212,23 @@ class VotingPanel extends JPanel
     private void updateCountdown() {
         VotingManager manager = frame.getCurrentManager();
         if (manager == null) { stopTimer(); return; }
-
         try {
-            LocalDateTime end = manager.getElectionEnd();
-            Duration remaining = Duration.between(LocalDateTime.now(), end);
-
+            Duration remaining = Duration.between(LocalDateTime.now(), manager.getElectionEnd());
             if (remaining.isNegative() || remaining.isZero()) {
                 stopTimer();
                 timeRemainingLabel.setText("00:00");
                 statusValueLabel.setText("Voting ended");
-                electionDAO.updateStatus(manager.getElectionId(),
-                        ElectionDAO.Status.COMPLETED);
-
-                JOptionPane.showMessageDialog(frame,
-                        "Election voting window has ended.",
+                electionDAO.updateStatus(manager.getElectionId(), ElectionDAO.Status.COMPLETED);
+                JOptionPane.showMessageDialog(frame, "Election voting window has ended.",
                         "Time's Up", JOptionPane.INFORMATION_MESSAGE);
-
                 ResultsPanel rp = frame.getScreen(VotingAppFrame.SCREEN_RESULTS);
                 rp.setReturnScreen(VotingAppFrame.SCREEN_HOME);
                 frame.showScreen(VotingAppFrame.SCREEN_RESULTS);
                 return;
             }
-
             long totalSecs = remaining.getSeconds();
-            timeRemainingLabel.setText(
-                    String.format("%02d:%02d", totalSecs / 60, totalSecs % 60));
+            timeRemainingLabel.setText(String.format("%02d:%02d", totalSecs / 60, totalSecs % 60));
             refreshStats();
-
         } catch (SQLException ex) {
             timeRemainingLabel.setText("Error");
         }
@@ -2281,51 +2238,31 @@ class VotingPanel extends JPanel
         VotingManager manager = frame.getCurrentManager();
         if (manager == null) return;
         try {
-            int votesCast  = manager.getVotes().size();
-            int totalVoters = manager.getVoters().size();
-            votesCastLabel.setText(votesCast + " / " + totalVoters);
+            votesCastLabel.setText(manager.getVotes().size() + " / " + manager.getVoters().size());
         } catch (SQLException ignored) { }
     }
-
-    // ═══════════════════════════════════════════════════════════════════
-    //  Refreshable
-    // ═══════════════════════════════════════════════════════════════════
 
     @Override
     public void refresh() {
         VotingManager manager = frame.getCurrentManager();
         if (manager == null) return;
-
         try {
-            electionNameLabel.setText(
-                    manager.getElectionName() + " — Voting");
-
+            electionNameLabel.setText(manager.getElectionName() + " — Voting");
             tableModel.setRowCount(0);
-            Collection<Candidate> candidates = manager.getCandidates();
-            for (Candidate c : candidates) {
+            for (Candidate c : manager.getCandidates()) {
                 tableModel.addRow(new Object[]{
-                        c.getCandidateId(), c.getName(),
-                        c.getPoliticalParty(), "Vote"
+                        c.getCandidateId(), c.getName(), c.getPoliticalParty(), "Vote"
                 });
             }
-
             statusValueLabel.setText("Voting in progress");
             refreshStats();
             startTimer();
-
         } catch (SQLException ex) {
             electionNameLabel.setText("Error loading election");
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  Vote Button (table cell renderer / editor)
-    // ═══════════════════════════════════════════════════════════════════
-
-    /** Renders a blue "Vote" label in every Action cell. */
-    private class VoteButtonRenderer extends JLabel
-            implements TableCellRenderer {
-
+    private class VoteButtonRenderer extends JLabel implements TableCellRenderer {
         VoteButtonRenderer() {
             setOpaque(true);
             setFont(new Font("Segoe UI", Font.BOLD, 11));
@@ -2343,10 +2280,7 @@ class VotingPanel extends JPanel
         }
     }
 
-    /** Clickable editor that prompts for voter ID and casts the vote. */
-    private class VoteButtonEditor extends AbstractCellEditor
-            implements TableCellEditor {
-
+    private class VoteButtonEditor extends AbstractCellEditor implements TableCellEditor {
         private final JButton button;
 
         VoteButtonEditor() {
@@ -2360,11 +2294,8 @@ class VotingPanel extends JPanel
                 int row = table.getEditingRow();
                 fireEditingStopped();
                 if (row >= 0 && row < tableModel.getRowCount()) {
-                    SwingUtilities.invokeLater(() -> {
-                        String candidateId =
-                                (String) tableModel.getValueAt(row, 0);
-                        handleVote(candidateId);
-                    });
+                    SwingUtilities.invokeLater(() ->
+                            handleVote((String) tableModel.getValueAt(row, 0)));
                 }
             });
         }
@@ -2376,9 +2307,6 @@ class VotingPanel extends JPanel
         }
 
         @Override
-        public Object getCellEditorValue() {
-            return "Vote";
-        }
+        public Object getCellEditorValue() { return "Vote"; }
     }
 }
-

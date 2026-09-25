@@ -1,23 +1,10 @@
 package com.voting;
+
 import java.io.IOException;
 import java.sql.SQLException;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Scanner;
-
-/**
- * Entry point for the Online Voting System.
- *
- * Provides a menu-driven command-line interface:
- *   Main Menu — Start/Select Election, View Previous Elections, Exit
- *   New election → register candidates/voters → start voting → results
- *   Existing UPCOMING election → continue registration → start voting
- *   Existing ACTIVE election → voting menu
- *   COMPLETED election → view results, export, or conduct re-election
- *
- * Run using:
- * java -cp "output;lib/*" com.voting.Main
- */
 
 public class Main {
 
@@ -35,13 +22,8 @@ public class Main {
         System.out.println("  Goodbye!\n");
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  Main Menu
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ── Main Menu ────────────────────────────────────────────────────────
 
-    /**
-     * Top-level menu loop. Repeats until the user chooses Exit.
-     */
     private static void mainMenuLoop() {
         boolean running = true;
         while (running) {
@@ -68,14 +50,8 @@ public class Main {
         System.out.print("  Choose an option: ");
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  Option 1 — Start / Select Election
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ── Start / Select Election ──────────────────────────────────────────
 
-    /**
-     * Lets the user create a brand-new election or attach to an existing one
-     * by ID. Behavior after attachment depends on the election's status.
-     */
     private static void startOrSelectElection() {
         System.out.println("  ── Start / Select Election ──\n");
         System.out.println("  1. Create a new election");
@@ -88,15 +64,11 @@ public class Main {
         switch (choice) {
             case "1" -> createNewElection();
             case "2" -> attachToExistingElection();
-            case "0" -> { /* back */ }
+            case "0" -> { }
             default  -> System.out.println("  Invalid option.\n");
         }
     }
 
-    /**
-     * Creates a brand-new election: prompts for name + duration, then
-     * enters the registration → voting → results workflow.
-     */
     private static void createNewElection() {
         System.out.println("  ── Create New Election ──\n");
 
@@ -107,9 +79,8 @@ public class Main {
             name = sc.nextLine().trim();
         }
 
-        // Handle duplicate names
         name = resolveElectionName(name);
-        if (name == null) return;  // user cancelled
+        if (name == null) return;
 
         int minutes = readPositiveInt("  Voting window duration in minutes: ");
 
@@ -123,16 +94,11 @@ public class Main {
             return;
         }
 
-        if (!registrationPhase()) return;  // user chose Back
-        votingPhase();            // Phase 3: start election, cast votes
-        resultsPhase();           // Phase 4: display / export
+        if (!registrationPhase()) return;
+        votingPhase();
+        resultsPhase();
     }
 
-    /**
-     * Attaches to an existing election by ID. Routes to the correct
-     * phase based on status: UPCOMING → registration, ACTIVE → voting,
-     * COMPLETED → completed-election menu.
-     */
     private static void attachToExistingElection() {
         int electionId = readPositiveInt("  Enter election ID: ");
 
@@ -146,7 +112,6 @@ public class Main {
             return;
         }
 
-        // Determine current status and branch accordingly
         try {
             ElectionDAO.ElectionRecord record = electionDAO.findById(electionId);
             if (record == null) {
@@ -160,7 +125,7 @@ public class Main {
             switch (record.status) {
                 case "UPCOMING" -> {
                     System.out.println("  Election is UPCOMING — entering registration phase.\n");
-                    if (!registrationPhase()) break;  // user chose Back
+                    if (!registrationPhase()) break;
                     votingPhase();
                     resultsPhase();
                 }
@@ -180,14 +145,8 @@ public class Main {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  Option 2 — View Previous Elections
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ── View Previous Elections ──────────────────────────────────────────
 
-    /**
-     * Lists all completed elections and lets the user select one to
-     * view results, candidates, details, or conduct a re-election.
-     */
     private static void viewPreviousElections() {
         System.out.println("  ── Previous Elections ──\n");
 
@@ -204,7 +163,6 @@ public class Main {
             return;
         }
 
-        // Display table of completed elections
         System.out.println("  " + "-".repeat(78));
         System.out.printf("  %-6s  %-28s  %-20s  %-10s  %s%n",
                 "ID", "Name", "End Time", "Status", "Parent ID");
@@ -220,11 +178,9 @@ public class Main {
         System.out.println("  " + "-".repeat(78));
         System.out.println();
 
-        // Let user select one
         int selectedId = readNonNegativeInt("  Enter election ID to view (or 0 to go back): ");
         if (selectedId == 0) return;
 
-        // Verify the selected ID is among the completed elections
         ElectionDAO.ElectionRecord selected = null;
         for (ElectionDAO.ElectionRecord rec : completed) {
             if (rec.electionId == selectedId) {
@@ -237,7 +193,6 @@ public class Main {
             return;
         }
 
-        // Attach manager to the selected completed election
         try {
             manager = new VotingManager(selectedId);
         } catch (SQLException | IllegalArgumentException e) {
@@ -248,14 +203,8 @@ public class Main {
         completedElectionMenu(selected);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  Completed Election Menu
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ── Completed Election Menu ──────────────────────────────────────────
 
-    /**
-     * Menu for a completed election: view results, candidates, export,
-     * or conduct a re-election.
-     */
     private static void completedElectionMenu(ElectionDAO.ElectionRecord record) {
         boolean viewing = true;
         while (viewing) {
@@ -275,28 +224,21 @@ public class Main {
 
             switch (choice) {
                 case "1" -> {
-                    try {
-                        manager.displayResults();
-                    } catch (SQLException e) {
+                    try { manager.displayResults(); }
+                    catch (SQLException e) {
                         System.out.println("  ✗ Error displaying results: " + e.getMessage() + "\n");
                     }
                 }
                 case "2" -> listCandidates();
                 case "3" -> displayElectionDetails(record);
                 case "4" -> exportReport();
-                case "5" -> {
-                    conductReElection(record);
-                    viewing = false; // After re-election flow, return to main menu
-                }
+                case "5" -> { conductReElection(record); viewing = false; }
                 case "0" -> viewing = false;
                 default  -> System.out.println("  Invalid option. Please choose 0-5.\n");
             }
         }
     }
 
-    /**
-     * Displays detailed information about a completed election.
-     */
     private static void displayElectionDetails(ElectionDAO.ElectionRecord record) {
         System.out.println("  ── Election Details ──\n");
         System.out.println("  Election ID    : " + record.electionId);
@@ -306,7 +248,6 @@ public class Main {
         System.out.println("  End Time       : " + record.endTime.format(DATETIME_FMT));
         System.out.println("  Parent ID      : " +
                 (record.parentElectionId == null ? "None (original)" : record.parentElectionId));
-
         try {
             System.out.println("  Voters         : " + manager.getVoters().size());
             System.out.println("  Candidates     : " + manager.getCandidates().size());
@@ -317,27 +258,18 @@ public class Main {
         System.out.println();
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  Re-Election
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ── Re-Election ──────────────────────────────────────────────────────
 
-    /**
-     * Creates a new election linked to a completed one via parent_election_id.
-     * The old election is never modified.
-     */
     private static void conductReElection(ElectionDAO.ElectionRecord parentRecord) {
         System.out.println("  ── Conduct Re-Election ──\n");
         System.out.printf("  Original election: '%s' (ID: %d)%n%n", parentRecord.name, parentRecord.electionId);
 
         System.out.print("  Enter new election name [Re: " + parentRecord.name + "]: ");
         String name = sc.nextLine().trim();
-        if (name.isEmpty()) {
-            name = "Re: " + parentRecord.name;
-        }
+        if (name.isEmpty()) name = "Re: " + parentRecord.name;
 
-        // Handle duplicate names
         name = resolveElectionName(name);
-        if (name == null) return;  // user cancelled
+        if (name == null) return;
 
         int minutes = readPositiveInt("  Voting window duration in minutes: ");
 
@@ -351,26 +283,15 @@ public class Main {
             return;
         }
 
-        // Enter the full election workflow for the new election
-        if (!registrationPhase()) return;  // user chose Back
+        if (!registrationPhase()) return;
         votingPhase();
         resultsPhase();
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  Phase 2 — Registration
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ── Registration Phase ───────────────────────────────────────────────
 
-    /**
-     * Loops over a registration-only menu until the operator explicitly
-     * starts the election (option 5).
-     *
-     * @return {@code true} if the election was started, {@code false}
-     *         if the user chose Back (callers should skip subsequent phases)
-     */
     private static boolean registrationPhase() {
         System.out.println("  ── Phase 2: Registration ──\n");
-
         while (true) {
             printRegistrationMenu();
             String choice = sc.nextLine().trim();
@@ -381,13 +302,11 @@ public class Main {
                 case "3" -> listCandidates();
                 case "4" -> listVoters();
                 case "5" -> {
-                    if (confirmStartElection()) {
-                        return true;  // election started successfully
-                    }
+                    if (confirmStartElection()) return true;
                 }
                 case "0" -> {
                     System.out.println("  Returning to main menu.\n");
-                    return false; // back to main menu, do NOT proceed to voting
+                    return false;
                 }
                 default  -> System.out.println("  Invalid option. Please choose 0-5.\n");
             }
@@ -408,10 +327,6 @@ public class Main {
         System.out.print("  Choose an option: ");
     }
 
-    /**
-     * Validates that at least one candidate and one voter exist,
-     * then confirms and starts the election timer.
-     */
     private static boolean confirmStartElection() {
         try {
             if (manager.getCandidates().isEmpty()) {
@@ -431,8 +346,6 @@ public class Main {
             String confirm = sc.nextLine().trim().toLowerCase();
 
             if (confirm.equals("y") || confirm.equals("yes")) {
-                // Use startElection(int) for attached UPCOMING elections (duration may be 0),
-                // otherwise use startElection() which uses the pre-set duration.
                 if (manager.getDurationMinutes() <= 0) {
                     int minutes = readPositiveInt("  Enter voting duration in minutes: ");
                     manager.startElection(minutes);
@@ -453,20 +366,13 @@ public class Main {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  Phase 3 — Voting
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ── Voting Phase ─────────────────────────────────────────────────────
 
-    /**
-     * Loops over the voting menu until the operator ends the election
-     * or the time window expires.
-     */
     private static void votingPhase() {
         System.out.println("  ── Phase 3: Voting ──\n");
 
         boolean voting = true;
         while (voting) {
-            // Auto-detect window expiry
             try {
                 if (!manager.isElectionOpen()) {
                     System.out.println("  ⏰  Election voting window has ended.\n");
@@ -485,21 +391,16 @@ public class Main {
                 case "2" -> listCandidates();
                 case "3" -> listVoters();
                 case "4" -> {
-                    try {
-                        manager.displayResults();
-                    } catch (SQLException e) {
+                    try { manager.displayResults(); }
+                    catch (SQLException e) {
                         System.out.println("  ✗ Error displaying results: " + e.getMessage() + "\n");
                     }
                 }
-                case "5" -> {
-                    System.out.println("  Ending voting phase.\n");
-                    voting = false;
-                }
+                case "5" -> { System.out.println("  Ending voting phase.\n"); voting = false; }
                 default  -> System.out.println("  Invalid option. Please choose 1-5.\n");
             }
         }
 
-        // Mark the election as COMPLETED in the database
         try {
             electionDAO.updateStatus(manager.getElectionId(), ElectionDAO.Status.COMPLETED);
             System.out.println("  ✓  Election marked as COMPLETED.\n");
@@ -521,15 +422,12 @@ public class Main {
         System.out.print("  Choose an option: ");
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  Phase 4 — Results
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ── Results Phase ────────────────────────────────────────────────────
 
     private static void resultsPhase() {
         System.out.println("  ── Phase 4: Results ──\n");
-        try {
-            manager.displayResults();
-        } catch (SQLException e) {
+        try { manager.displayResults(); }
+        catch (SQLException e) {
             System.out.println("  ✗ Error displaying results: " + e.getMessage() + "\n");
         }
 
@@ -540,9 +438,8 @@ public class Main {
             System.out.println();
             switch (choice) {
                 case "1" -> {
-                    try {
-                        manager.displayResults();
-                    } catch (SQLException e) {
+                    try { manager.displayResults(); }
+                    catch (SQLException e) {
                         System.out.println("  ✗ Error displaying results: " + e.getMessage() + "\n");
                     }
                 }
@@ -564,16 +461,13 @@ public class Main {
         System.out.print("  Choose an option: ");
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  Shared option handlers
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ── Shared option handlers ───────────────────────────────────────────
 
     private static void addCandidate() {
         System.out.print("  Enter Candidate Name  : ");
         String name = sc.nextLine().trim();
         System.out.print("  Enter Political Party : ");
         String party = sc.nextLine().trim();
-
         try {
             Candidate c = manager.registerCandidate(name, party);
             System.out.printf("  ✓ Candidate registered (ID: %s).%n%n", c.getCandidateId());
@@ -585,7 +479,6 @@ public class Main {
     }
 
     private static void addVoter() {
-        // Validate numeric Voter ID before asking for name
         String id;
         while (true) {
             System.out.print("  Enter Voter ID (0 to cancel): ");
@@ -595,8 +488,7 @@ public class Main {
                 return;
             }
             try {
-                int parsed = Integer.parseInt(id);
-                if (parsed > 0) break;
+                if (Integer.parseInt(id) > 0) break;
                 System.out.println("  Voter ID must be a positive number.");
             } catch (NumberFormatException e) {
                 System.out.println("  Invalid Voter ID — must be a numeric value.");
@@ -605,7 +497,6 @@ public class Main {
 
         System.out.print("  Enter Voter Name : ");
         String name = sc.nextLine().trim();
-
         try {
             manager.registerVoter(new Voter(id, name));
             System.out.println("  ✓ Voter registered.\n");
@@ -659,15 +550,11 @@ public class Main {
     }
 
     private static void castVoteInteractive() {
-        // Show available candidates so the voter can see their IDs
         listCandidates();
-
         System.out.print("  Enter your Voter ID: ");
         String voterId = sc.nextLine().trim();
-
         System.out.print("  Enter Candidate ID : ");
         String candidateId = sc.nextLine().trim();
-
         try {
             manager.castVote(voterId, candidateId);
             System.out.println("  ✓ Vote successfully cast!\n");
@@ -692,17 +579,13 @@ public class Main {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  Helpers
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ── Helpers ──────────────────────────────────────────────────────────
 
-    /** Reads a positive integer from the console, re-prompting on invalid input. */
     private static int readPositiveInt(String prompt) {
         while (true) {
             System.out.print(prompt);
-            String input = sc.nextLine().trim();
             try {
-                int value = Integer.parseInt(input);
+                int value = Integer.parseInt(sc.nextLine().trim());
                 if (value > 0) return value;
                 System.out.println("  Please enter a number greater than 0.");
             } catch (NumberFormatException e) {
@@ -711,13 +594,11 @@ public class Main {
         }
     }
 
-    /** Reads a non-negative integer (0 or above) from the console, re-prompting on invalid input. */
     private static int readNonNegativeInt(String prompt) {
         while (true) {
             System.out.print(prompt);
-            String input = sc.nextLine().trim();
             try {
-                int value = Integer.parseInt(input);
+                int value = Integer.parseInt(sc.nextLine().trim());
                 if (value >= 0) return value;
                 System.out.println("  Please enter 0 or a positive number.");
             } catch (NumberFormatException e) {
@@ -731,21 +612,10 @@ public class Main {
         return s.length() <= maxLen ? s : s.substring(0, maxLen - 1) + "…";
     }
 
-    /**
-     * Checks whether an election with the given name already exists.
-     * If so, asks the user whether to proceed; if yes, auto-generates a
-     * unique name by appending (2), (3), etc.
-     *
-     * @param name the desired election name
-     * @return the resolved (possibly suffixed) unique name, or {@code null}
-     *         if the user chose to cancel
-     */
     private static String resolveElectionName(String name) {
         try {
             ElectionDAO.ElectionRecord existing = electionDAO.findByName(name);
-            if (existing == null) {
-                return name;  // no duplicate
-            }
+            if (existing == null) return name;
 
             System.out.printf("%n  An election named '%s' already exists.%n", name);
             System.out.printf("  Existing Election ID: %d%n", existing.electionId);
@@ -757,7 +627,6 @@ public class Main {
                 return null;
             }
 
-            // Auto-generate a unique name: "Name (2)", "Name (3)", ...
             int suffix = 2;
             String uniqueName;
             do {
