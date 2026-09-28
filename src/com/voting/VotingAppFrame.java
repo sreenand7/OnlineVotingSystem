@@ -7,6 +7,7 @@ import java.io.File;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -95,6 +96,9 @@ class AddCandidatePanel extends JPanel {
             clearFields();
         } catch (IllegalArgumentException ex) {
             JOptionPane.showMessageDialog(frame, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        } catch (IllegalStateException ex) {
+            JOptionPane.showMessageDialog(frame, ex.getMessage(),
+                    "Cannot Add Candidate", JOptionPane.WARNING_MESSAGE);
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(frame,
                     "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -112,6 +116,7 @@ class AddVoterPanel extends JPanel {
     private final VotingAppFrame frame;
     private JTextField idField;
     private JTextField nameField;
+    private JTextField dobField;
 
     public AddVoterPanel(VotingAppFrame frame) {
         this.frame = frame;
@@ -144,7 +149,17 @@ class AddVoterPanel extends JPanel {
         nameField = UIConstants.createStyledField();
         nameField.setAlignmentX(Component.LEFT_ALIGNMENT);
         card.add(nameField);
-        card.add(Box.createVerticalStrut(32));
+        card.add(Box.createVerticalStrut(20));
+
+        card.add(UIConstants.createFieldLabel("Date of Birth"));
+        card.add(Box.createVerticalStrut(8));
+        dobField = UIConstants.createStyledField();
+        dobField.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(dobField);
+        card.add(Box.createVerticalStrut(8));
+        card.add(UIConstants.createMutedLabel(
+                "Format: dd/MM/yyyy  —  the initial PIN is generated as first name + DOB."));
+        card.add(Box.createVerticalStrut(24));
 
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         btnRow.setOpaque(false);
@@ -173,9 +188,10 @@ class AddVoterPanel extends JPanel {
     private void addVoter() {
         String id   = idField.getText().trim();
         String name = nameField.getText().trim();
-        if (id.isEmpty() || name.isEmpty()) {
+        String dobText = dobField.getText().trim();
+        if (id.isEmpty() || name.isEmpty() || dobText.isEmpty()) {
             JOptionPane.showMessageDialog(frame,
-                    "Both voter ID and name are required.",
+                    "Voter ID, name and date of birth are all required.",
                     "Validation Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -193,13 +209,34 @@ class AddVoterPanel extends JPanel {
                     "Validation Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
+
+        LocalDate dob;
         try {
-            frame.getCurrentManager().registerVoter(new Voter(id, name));
+            dob = VotingManager.parseDateOfBirth(dobText);
+        } catch (java.time.format.DateTimeParseException e) {
             JOptionPane.showMessageDialog(frame,
-                    "Voter '" + name + "' registered successfully!",
-                    "Success", JOptionPane.INFORMATION_MESSAGE);
+                    "Date of birth must be in dd/MM/yyyy format (e.g. 05/12/2000).",
+                    "Validation Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            String generatedPin =
+                    frame.getCurrentManager().registerVoter(new Voter(id, name, dob));
+            if (generatedPin == null) {
+                JOptionPane.showMessageDialog(frame,
+                        "Voter " + id + " already existed — enrolled in this election.\n"
+                        + "Their existing PIN was left unchanged.",
+                        "Voter Enrolled", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(frame,
+                        "Voter '" + name + "' registered.\n\n"
+                        + "Initial PIN: " + generatedPin + "\n\n"
+                        + "Share this PIN with the voter. It is not stored in plain text.",
+                        "Success", JOptionPane.INFORMATION_MESSAGE);
+            }
             clearFields();
-        } catch (IllegalArgumentException ex) {
+        } catch (IllegalStateException ex) {
             JOptionPane.showMessageDialog(frame, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         } catch (SQLException | VotingException ex) {
             JOptionPane.showMessageDialog(frame,
@@ -210,6 +247,632 @@ class AddVoterPanel extends JPanel {
     private void clearFields() {
         idField.setText("");
         nameField.setText("");
+        dobField.setText("");
+    }
+}
+
+class VoterLoginPanel extends JPanel {
+
+    private final VotingAppFrame frame;
+    private JTextField     idField;
+    private JPasswordField pinField;
+
+    public VoterLoginPanel(VotingAppFrame frame) {
+        this.frame = frame;
+        setBackground(UIConstants.BG_DARK);
+        setLayout(new GridBagLayout());
+        buildUI();
+    }
+
+    private void buildUI() {
+        JPanel card = new UIConstants.RoundedPanel(16, UIConstants.BG_CARD);
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBorder(BorderFactory.createEmptyBorder(48, 48, 48, 48));
+
+        JLabel header = new JLabel("Voter Login");
+        header.setFont(UIConstants.FONT_HEADER);
+        header.setForeground(UIConstants.TEXT_PRIMARY);
+        header.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(header);
+        card.add(Box.createVerticalStrut(8));
+        card.add(UIConstants.createMutedLabel(
+                "Sign in with your voter ID and PIN to cast your ballot."));
+        card.add(Box.createVerticalStrut(32));
+
+        card.add(UIConstants.createFieldLabel("Voter ID"));
+        card.add(Box.createVerticalStrut(8));
+        idField = UIConstants.createStyledField();
+        idField.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(idField);
+        card.add(Box.createVerticalStrut(20));
+
+        card.add(UIConstants.createFieldLabel("PIN"));
+        card.add(Box.createVerticalStrut(8));
+        pinField = UIConstants.createStyledPasswordField();
+        pinField.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(pinField);
+        card.add(Box.createVerticalStrut(8));
+        card.add(UIConstants.createMutedLabel(
+                "Your initial PIN is issued by the administrator when you are registered."));
+        card.add(Box.createVerticalStrut(28));
+
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
+        btnRow.setOpaque(false);
+        btnRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JButton backBtn = UIConstants.createSecondaryButton("Back");
+        backBtn.setPreferredSize(new Dimension(120, 44));
+        backBtn.addActionListener(e -> {
+            pinField.setText("");
+            frame.showScreen(VotingAppFrame.SCREEN_HOME);
+        });
+        btnRow.add(backBtn);
+
+        JButton loginBtn = UIConstants.createPrimaryButton("Login");
+        loginBtn.setPreferredSize(new Dimension(160, 44));
+        loginBtn.addActionListener(e -> login());
+        btnRow.add(loginBtn);
+        card.add(btnRow);
+
+        pinField.addActionListener(e -> login());
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;  gbc.gridy = 0;
+        gbc.weightx = 1; gbc.weighty = 1;
+        gbc.anchor = GridBagConstraints.CENTER;
+        add(card, gbc);
+    }
+
+    private void login() {
+        String voterId = idField.getText().trim();
+        String pin     = new String(pinField.getPassword());
+        pinField.setText("");
+
+        if (voterId.isEmpty() || pin.isEmpty()) {
+            warn("Enter both your Voter ID and PIN.");
+            return;
+        }
+
+        try {
+            if (!VotingManager.hasPin(voterId)) {
+                warn("No PIN has been issued for this voter ID.\n"
+                        + "Please contact the election administrator.");
+                return;
+            }
+            if (!VotingManager.login(voterId, pin)) {
+                warn("Incorrect PIN. Please try again.");
+                return;
+            }
+            onLoginSuccess();
+        } catch (VotingException ex) {
+            warn(ex.getMessage());
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(frame, "Database error: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onLoginSuccess() {
+        idField.setText("");
+        pinField.setText("");
+        frame.showScreen(VotingAppFrame.SCREEN_VOTER_ELECTIONS);
+    }
+
+    private void warn(String msg) {
+        JOptionPane.showMessageDialog(frame, msg, "Login Failed", JOptionPane.WARNING_MESSAGE);
+    }
+}
+
+class AdminLoginPanel extends JPanel {
+
+    private final VotingAppFrame frame;
+    private JTextField     idField;
+    private JPasswordField passwordField;
+
+    public AdminLoginPanel(VotingAppFrame frame) {
+        this.frame = frame;
+        setBackground(UIConstants.BG_DARK);
+        setLayout(new GridBagLayout());
+        buildUI();
+    }
+
+    private void buildUI() {
+        JPanel card = new UIConstants.RoundedPanel(16, UIConstants.BG_CARD);
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBorder(BorderFactory.createEmptyBorder(48, 48, 48, 48));
+
+        JLabel header = new JLabel("Admin Login");
+        header.setFont(UIConstants.FONT_HEADER);
+        header.setForeground(UIConstants.TEXT_PRIMARY);
+        header.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(header);
+        card.add(Box.createVerticalStrut(8));
+        card.add(UIConstants.createMutedLabel(
+                "Administrator access is required to manage elections."));
+        card.add(Box.createVerticalStrut(32));
+
+        card.add(UIConstants.createFieldLabel("Admin ID"));
+        card.add(Box.createVerticalStrut(8));
+        idField = UIConstants.createStyledField();
+        idField.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(idField);
+        card.add(Box.createVerticalStrut(20));
+
+        card.add(UIConstants.createFieldLabel("Password"));
+        card.add(Box.createVerticalStrut(8));
+        passwordField = UIConstants.createStyledPasswordField();
+        passwordField.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(passwordField);
+        card.add(Box.createVerticalStrut(32));
+
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
+        btnRow.setOpaque(false);
+        btnRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JButton backBtn = UIConstants.createSecondaryButton("Back");
+        backBtn.setPreferredSize(new Dimension(120, 44));
+        backBtn.addActionListener(e -> {
+            passwordField.setText("");
+            frame.showScreen(VotingAppFrame.SCREEN_HOME);
+        });
+        btnRow.add(backBtn);
+
+        JButton loginBtn = UIConstants.createPrimaryButton("Login");
+        loginBtn.setPreferredSize(new Dimension(160, 44));
+        loginBtn.addActionListener(e -> login());
+        btnRow.add(loginBtn);
+        card.add(btnRow);
+
+        passwordField.addActionListener(e -> login());
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;  gbc.gridy = 0;
+        gbc.weightx = 1; gbc.weighty = 1;
+        gbc.anchor = GridBagConstraints.CENTER;
+        add(card, gbc);
+    }
+
+    private void login() {
+        String adminId  = idField.getText().trim();
+        String password = new String(passwordField.getPassword());
+        passwordField.setText("");
+
+        if (adminId.isEmpty() || password.isEmpty()) {
+            warn("Enter both your Admin ID and password.");
+            return;
+        }
+        try {
+            if (!VotingManager.adminLogin(adminId, password)) {
+                warn("Invalid Admin ID or password.");
+                return;
+            }
+            idField.setText("");
+            frame.showScreen(VotingAppFrame.SCREEN_ADMIN_DASHBOARD);
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(frame, "Database error: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void warn(String msg) {
+        JOptionPane.showMessageDialog(frame, msg, "Login Failed", JOptionPane.WARNING_MESSAGE);
+    }
+}
+
+class AdminDashboardPanel extends JPanel implements VotingAppFrame.Refreshable {
+    private final VotingAppFrame frame;
+    private JLabel  welcomeLabel;
+    private JLabel  electionLabel;
+    private JButton completeBtn;
+
+
+    public AdminDashboardPanel(VotingAppFrame frame) {
+        this.frame = frame;
+        setBackground(UIConstants.BG_DARK);
+        setLayout(new BorderLayout());
+        setBorder(BorderFactory.createEmptyBorder(40, 60, 40, 60));
+        buildUI();
+    }
+
+    private void buildUI() {
+        // No back button here: the Logout button is the only way out of the
+        // admin session, so Back can never silently end it.
+        JPanel header = UIConstants.createHeaderPanel("Admin Dashboard", null, null);
+        add(header, BorderLayout.NORTH);
+
+        JPanel center = new JPanel();
+        center.setOpaque(false);
+        center.setLayout(new BoxLayout(center, BoxLayout.Y_AXIS));
+
+        JPanel infoCard = new UIConstants.RoundedPanel(12, UIConstants.BG_CARD);
+        infoCard.setLayout(new BoxLayout(infoCard, BoxLayout.Y_AXIS));
+        infoCard.setBorder(BorderFactory.createEmptyBorder(24, 24, 24, 24));
+        infoCard.setAlignmentX(Component.LEFT_ALIGNMENT);
+        infoCard.setMaximumSize(new Dimension(Integer.MAX_VALUE, 110));
+
+        welcomeLabel = new JLabel("Administrator");
+        welcomeLabel.setFont(UIConstants.FONT_HEADER);
+        welcomeLabel.setForeground(UIConstants.TEXT_PRIMARY);
+        welcomeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        infoCard.add(welcomeLabel);
+        infoCard.add(Box.createVerticalStrut(10));
+
+        electionLabel = new JLabel("No election selected");
+        electionLabel.setFont(UIConstants.FONT_BODY);
+        electionLabel.setForeground(UIConstants.TEXT_SECONDARY);
+        electionLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        infoCard.add(electionLabel);
+
+        center.add(infoCard);
+        center.add(Box.createVerticalStrut(28));
+
+        JPanel grid = new JPanel(new GridLayout(5, 2, 16, 16));
+        grid.setOpaque(false);
+        grid.setAlignmentX(Component.LEFT_ALIGNMENT);
+        grid.setMaximumSize(new Dimension(Integer.MAX_VALUE, 320));
+
+        JButton createBtn = UIConstants.createPrimaryButton("Create Election");
+        createBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_CREATE_ELECTION));
+        grid.add(createBtn);
+
+        JButton selectBtn = UIConstants.createSecondaryButton("Select Election");
+        selectBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_ELECTION_SELECT));
+        grid.add(selectBtn);
+
+        JButton votersBtn = UIConstants.createSecondaryButton("Voter Management");
+        votersBtn.addActionListener(e -> openReadOrManage(VotingAppFrame.SCREEN_VOTERS));
+        grid.add(votersBtn);
+
+        JButton candidatesBtn = UIConstants.createSecondaryButton("Candidate Management");
+        candidatesBtn.addActionListener(e -> openReadOrManage(VotingAppFrame.SCREEN_CANDIDATES));
+        grid.add(candidatesBtn);
+
+        JButton resultsBtn = UIConstants.createSecondaryButton("Results / Export");
+        resultsBtn.addActionListener(e -> openResults());
+        grid.add(resultsBtn);
+
+        JButton previousBtn = UIConstants.createSecondaryButton("Previous Elections");
+        previousBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_PREVIOUS_ELECTIONS));
+        grid.add(previousBtn);
+
+        JButton reElectBtn = UIConstants.createSecondaryButton("Re-election");
+        reElectBtn.addActionListener(e -> openReElection());
+        grid.add(reElectBtn);
+
+        // Voter/candidate management for an ACTIVE election is read-only, so the
+        // dashboard needs its own way to close that election.
+        completeBtn = UIConstants.createDangerButton("Complete Election");
+        completeBtn.addActionListener(e -> completeSelectedElection());
+        grid.add(completeBtn);
+
+        JButton logoutBtn = UIConstants.createDangerButton("Logout");
+        logoutBtn.addActionListener(e -> {
+            VotingManager.adminLogout();
+            frame.showScreen(VotingAppFrame.SCREEN_HOME);
+        });
+        grid.add(logoutBtn);
+
+        center.add(grid);
+        add(center, BorderLayout.CENTER);
+    }
+
+    private void openElectionScoped(String screen, String message) {
+        if (frame.getCurrentManager() == null) {
+            // Stay on the dashboard — the admin session and this screen are unaffected
+            JOptionPane.showMessageDialog(frame, message, "No Election Selected",
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        frame.showScreen(screen);
+    }
+
+    private String selectedStatus() {
+        VotingManager manager = frame.getCurrentManager();
+        if (manager == null) return null;
+        try {
+            return manager.getStatus();
+        } catch (SQLException ex) {
+            return null;
+        }
+    }
+
+    // Only an UPCOMING election can be edited, so it alone opens the management
+    // screen. ACTIVE and COMPLETED both open the read-only view panels instead.
+    private void openReadOrManage(String viewScreen) {
+        String status = selectedStatus();
+        if (status == null) {
+            JOptionPane.showMessageDialog(frame, "Start or select an election first.",
+                    "No Election Selected", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if ("UPCOMING".equals(status)) {
+            frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT);
+            return;
+        }
+        openViewScreen(viewScreen);
+    }
+
+    // Both view panels already derive isUpcoming from the selected election's
+    // status, so their Remove action is disabled for ACTIVE and COMPLETED.
+    private void openViewScreen(String screen) {
+        if (screen.equals(VotingAppFrame.SCREEN_VOTERS)) {
+            VotersPanel vp = frame.getScreen(VotingAppFrame.SCREEN_VOTERS);
+            vp.setReturnScreen(VotingAppFrame.SCREEN_ADMIN_DASHBOARD);
+        } else {
+            CandidatesPanel cp = frame.getScreen(VotingAppFrame.SCREEN_CANDIDATES);
+            cp.setReturnScreen(VotingAppFrame.SCREEN_ADMIN_DASHBOARD);
+        }
+        frame.showScreen(screen);
+    }
+
+    // Final results only exist once voting has closed.
+    private void openResults() {
+        String status = selectedStatus();
+        if (status == null) {
+            openElectionScoped(VotingAppFrame.SCREEN_RESULTS, "Start or select an election first.");
+            return;
+        }
+        if (!"COMPLETED".equals(status)) {
+            JOptionPane.showMessageDialog(frame,
+                    "Results are only available once the election is COMPLETED.\n"
+                    + "This election is currently " + status + ".",
+                    "Results Not Available", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        ResultsPanel rp = frame.getScreen(VotingAppFrame.SCREEN_RESULTS);
+        rp.setReturnScreen(VotingAppFrame.SCREEN_ADMIN_DASHBOARD);
+        frame.showScreen(VotingAppFrame.SCREEN_RESULTS);
+    }
+
+    // Re-election replaces a finished election, so it needs a COMPLETED one.
+    private void openReElection() {
+        String status = selectedStatus();
+        if (status == null) {
+            JOptionPane.showMessageDialog(frame, "Select a completed election first.",
+                    "No Election Selected", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if (!"COMPLETED".equals(status)) {
+            JOptionPane.showMessageDialog(frame,
+                    "A re-election can only be conducted on a COMPLETED election.\n"
+                    + "This election is currently " + status + ".",
+                    "Re-election Not Available", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        frame.showScreen(VotingAppFrame.SCREEN_RE_ELECTION);
+    }
+
+    // Administrative action: ACTIVE -> COMPLETED, then straight to the final results.
+    private void completeSelectedElection() {
+        VotingManager manager = frame.getCurrentManager();
+        if (manager == null) return;
+        Object[] options = {"Cancel", "OK"};
+        int confirm = JOptionPane.showOptionDialog(frame,
+                "Are you sure you want to complete this election?\n"
+                + "Voting will close and results become final.",
+                "Complete Election", JOptionPane.DEFAULT_OPTION,
+                JOptionPane.WARNING_MESSAGE, null, options, options[1]);
+        if (confirm != 1) return;
+        try {
+            manager.completeElection();
+            frame.setCurrentRecord(new ElectionDAO().findById(manager.getElectionId()));
+            ResultsPanel rp = frame.getScreen(VotingAppFrame.SCREEN_RESULTS);
+            rp.setReturnScreen(VotingAppFrame.SCREEN_ADMIN_DASHBOARD);
+            frame.showScreen(VotingAppFrame.SCREEN_RESULTS);
+        } catch (IllegalStateException | SQLException ex) {
+            JOptionPane.showMessageDialog(frame, ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    @Override
+    public void refresh() {
+        if (!VotingManager.isAdminAuthenticated()) {
+            frame.showScreen(VotingAppFrame.SCREEN_ADMIN_LOGIN);
+            return;
+        }
+        welcomeLabel.setText("Welcome, " + VotingManager.getAuthenticatedAdminId());
+        VotingManager manager = frame.getCurrentManager();
+        if (manager == null) {
+            electionLabel.setText("No election selected");
+            completeBtn.setEnabled(false);
+            return;
+        }
+        try {
+            electionLabel.setText("Selected election: " + manager.getElectionName()
+                    + "  (ID " + manager.getElectionId() + ")");
+            completeBtn.setEnabled("ACTIVE".equals(manager.getStatus()));
+        } catch (SQLException ex) {
+            electionLabel.setText("Error loading election");
+            completeBtn.setEnabled(false);
+        }
+    }
+}
+
+class VoterElectionListPanel extends JPanel implements VotingAppFrame.Refreshable {
+    private static final DateTimeFormatter FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+    private final VotingAppFrame frame;
+    private DefaultTableModel tableModel;
+    private JTable            table;
+    private JLabel            summaryLabel;
+
+    public VoterElectionListPanel(VotingAppFrame frame) {
+        this.frame = frame;
+        setBackground(UIConstants.BG_DARK);
+        setLayout(new BorderLayout());
+        setBorder(BorderFactory.createEmptyBorder(30, 40, 30, 40));
+        buildUI();
+    }
+
+    private void buildUI() {
+        JPanel header = UIConstants.createHeaderPanel("My Elections", null, null);
+        add(header, BorderLayout.NORTH);
+
+        summaryLabel = new JLabel(" ");
+        summaryLabel.setFont(UIConstants.FONT_BODY);
+        summaryLabel.setForeground(UIConstants.TEXT_SECONDARY);
+        JPanel top = new JPanel();
+        top.setOpaque(false);
+        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
+        top.add(summaryLabel);
+        top.add(Box.createVerticalStrut(16));
+        add(top, BorderLayout.NORTH);
+
+        tableModel = new DefaultTableModel(
+                new String[]{"ID", "Election", "Closes", "Your Vote"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int col) { return false; }
+        };
+        table = UIConstants.createStyledTable(tableModel);
+        table.getColumnModel().getColumn(0).setPreferredWidth(60);
+        table.getColumnModel().getColumn(1).setPreferredWidth(320);
+        table.getColumnModel().getColumn(2).setPreferredWidth(170);
+        table.getColumnModel().getColumn(3).setPreferredWidth(120);
+        add(UIConstants.wrapInScrollPane(table), BorderLayout.CENTER);
+
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 12, 0));
+        bottom.setOpaque(false);
+        bottom.setBorder(BorderFactory.createEmptyBorder(16, 0, 0, 0));
+
+        // Back returns to the voter login screen; the session is deliberately kept
+        JButton backBtn = UIConstants.createSecondaryButton("Back");
+        backBtn.setPreferredSize(new Dimension(140, 44));
+        backBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_VOTER_LOGIN));
+        bottom.add(backBtn);
+
+        JButton changePinBtn = UIConstants.createSecondaryButton("Change PIN");
+        changePinBtn.setPreferredSize(new Dimension(160, 44));
+        changePinBtn.addActionListener(e -> showChangePinDialog());
+        bottom.add(changePinBtn);
+
+        JButton voteBtn = UIConstants.createPrimaryButton("Cast Vote");
+        voteBtn.setPreferredSize(new Dimension(160, 44));
+        voteBtn.addActionListener(e -> openSelectedElection());
+        bottom.add(voteBtn);
+
+        // Logout is the only button here that ends the session
+        JButton logoutBtn = UIConstants.createSecondaryButton("Logout");
+        logoutBtn.setPreferredSize(new Dimension(140, 44));
+        logoutBtn.addActionListener(e -> {
+            VotingManager.logout();
+            frame.showScreen(VotingAppFrame.SCREEN_HOME);
+        });
+        bottom.add(logoutBtn);
+        add(bottom, BorderLayout.SOUTH);
+    }
+
+    private void showChangePinDialog() {
+        JPasswordField currentField = UIConstants.createStyledPasswordField();
+        JPasswordField newField     = UIConstants.createStyledPasswordField();
+        JPasswordField confirmField = UIConstants.createStyledPasswordField();
+
+        JPanel box = new JPanel();
+        box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
+        box.add(UIConstants.createFieldLabel("Current PIN"));
+        box.add(Box.createVerticalStrut(6));
+        box.add(currentField);
+        box.add(Box.createVerticalStrut(12));
+        box.add(UIConstants.createFieldLabel("New PIN"));
+        box.add(Box.createVerticalStrut(6));
+        box.add(newField);
+        box.add(Box.createVerticalStrut(12));
+        box.add(UIConstants.createFieldLabel("Confirm New PIN"));
+        box.add(Box.createVerticalStrut(6));
+        box.add(confirmField);
+
+        int choice = JOptionPane.showConfirmDialog(frame, box, "Change PIN",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (choice != JOptionPane.OK_OPTION) {
+            clearPasswords(currentField, newField, confirmField);
+            return;
+        }
+
+        // Read first, clear afterwards — clearing before getPassword() wipes the entry
+        char[] current = currentField.getPassword();
+        char[] fresh   = newField.getPassword();
+        char[] confirm = confirmField.getPassword();
+        clearPasswords(currentField, newField, confirmField);
+
+        try {
+            VotingManager.changePin(new String(current), new String(fresh),
+                    new String(confirm));
+            JOptionPane.showMessageDialog(frame, "Your PIN has been changed.",
+                    "PIN Changed", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            JOptionPane.showMessageDialog(frame, ex.getMessage(),
+                    "Change PIN", JOptionPane.WARNING_MESSAGE);
+            return;
+        } catch (VotingException ex) {
+            JOptionPane.showMessageDialog(frame, ex.getMessage(),
+                    "Change PIN", JOptionPane.WARNING_MESSAGE);
+            return;
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(frame, "Database error: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+    }
+
+    private void clearPasswords(JPasswordField... fields) {
+        for (JPasswordField field : fields) {
+            field.setText("");
+        }
+    }
+
+    private void openSelectedElection() {
+        int row = table.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(frame, "Select an election first.",
+                    "No Selection", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int electionId = Integer.parseInt((String) tableModel.getValueAt(row, 0));
+        boolean alreadyVoted = "Voted".equals(tableModel.getValueAt(row, 3));
+        if (alreadyVoted) {
+            JOptionPane.showMessageDialog(frame,
+                    "You have already voted in this election.",
+                    "Already Voted", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        try {
+            frame.setCurrentManager(new VotingManager(electionId));
+            frame.setCurrentRecord(new ElectionDAO().findById(electionId));
+            frame.showScreen(VotingAppFrame.SCREEN_VOTING);
+        } catch (IllegalArgumentException | SQLException ex) {
+            JOptionPane.showMessageDialog(frame, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    @Override
+    public void refresh() {
+        tableModel.setRowCount(0);
+        VoterSession session = VotingManager.getSession();
+        if (!session.isLoggedIn()) {
+            frame.showScreen(VotingAppFrame.SCREEN_VOTER_LOGIN);
+            return;
+        }
+        summaryLabel.setText("Signed in as " + session.getVoterName()
+                + " (Voter ID " + session.getVoterId() + ")");
+        try {
+            List<ElectionDAO.VoterElection> elections =
+                    VotingManager.getEligibleActiveElections();
+            for (ElectionDAO.VoterElection ve : elections) {
+                tableModel.addRow(new Object[]{
+                        String.valueOf(ve.election.electionId),
+                        ve.election.name,
+                        ve.election.endTime != null ? ve.election.endTime.format(FMT) : "N/A",
+                        ve.hasVoted ? "Voted" : "Not voted"
+                });
+            }
+            if (elections.isEmpty())
+                summaryLabel.setText(summaryLabel.getText()
+                        + "  —  no ACTIVE elections available right now.");
+        } catch (SQLException ex) {
+            summaryLabel.setText("Could not load elections: " + ex.getMessage());
+        }
     }
 }
 
@@ -637,6 +1300,10 @@ class ElectionManagementPanel extends JPanel implements VotingAppFrame.Refreshab
     private JLabel  nameLabel;
     private JLabel  statusLabel;
     private JButton startBtn;
+    private JButton completeBtn;
+    private JButton addCandBtn;
+    private JButton addVoterBtn;
+    private JButton importVoterBtn;
 
     public ElectionManagementPanel(VotingAppFrame frame) {
         this.frame = frame;
@@ -648,8 +1315,8 @@ class ElectionManagementPanel extends JPanel implements VotingAppFrame.Refreshab
 
     private void buildUI() {
         JPanel header = UIConstants.createHeaderPanel(
-                "Election Management", "← Back to Home",
-                () -> frame.showScreen(VotingAppFrame.SCREEN_HOME));
+                "Election Management", "← Back",
+                () -> frame.showScreen(VotingAppFrame.SCREEN_ADMIN_DASHBOARD));
         add(header, BorderLayout.NORTH);
 
         JPanel center = new JPanel();
@@ -691,15 +1358,15 @@ class ElectionManagementPanel extends JPanel implements VotingAppFrame.Refreshab
         grid.setAlignmentX(Component.LEFT_ALIGNMENT);
         grid.setMaximumSize(new Dimension(Integer.MAX_VALUE, 240));
 
-        JButton addCandBtn = UIConstants.createSecondaryButton("Add Candidate");
+        addCandBtn = UIConstants.createSecondaryButton("Add Candidate");
         addCandBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_ADD_CANDIDATE));
         grid.add(addCandBtn);
 
-        JButton addVoterBtn = UIConstants.createSecondaryButton("Add Voter");
+        addVoterBtn = UIConstants.createSecondaryButton("Add Voter");
         addVoterBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_ADD_VOTER));
         grid.add(addVoterBtn);
 
-        JButton importVoterBtn = UIConstants.createSecondaryButton("Import Voter List");
+        importVoterBtn = UIConstants.createSecondaryButton("Import Voter List");
         importVoterBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_IMPORT_VOTERS));
         grid.add(importVoterBtn);
 
@@ -723,8 +1390,12 @@ class ElectionManagementPanel extends JPanel implements VotingAppFrame.Refreshab
         startBtn.addActionListener(e -> startElection());
         grid.add(startBtn);
 
+        completeBtn = UIConstants.createDangerButton("Complete Election");
+        completeBtn.addActionListener(e -> completeElection());
+        grid.add(completeBtn);
+
         JButton backBtn = UIConstants.createSecondaryButton("Back");
-        backBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_ELECTION_SELECT));
+        backBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_ADMIN_DASHBOARD));
         grid.add(backBtn);
 
         center.add(grid);
@@ -760,7 +1431,10 @@ class ElectionManagementPanel extends JPanel implements VotingAppFrame.Refreshab
             }
 
             frame.setCurrentRecord(new ElectionDAO().findById(manager.getElectionId()));
-            frame.showScreen(VotingAppFrame.SCREEN_VOTING);
+            JOptionPane.showMessageDialog(frame,
+                    "Election is now ACTIVE.\nVoters can log in and cast their votes.",
+                    "Election Started", JOptionPane.INFORMATION_MESSAGE);
+            frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT);
         } catch (NumberFormatException ex) {
             warn("Please enter a valid number.");
         } catch (IllegalStateException | SQLException ex) {
@@ -770,6 +1444,28 @@ class ElectionManagementPanel extends JPanel implements VotingAppFrame.Refreshab
 
     private void warn(String msg) {
         JOptionPane.showMessageDialog(frame, msg, "Cannot Start", JOptionPane.WARNING_MESSAGE);
+    }
+
+    // Administrative action. Voters never see this control.
+    private void completeElection() {
+        VotingManager manager = frame.getCurrentManager();
+        if (manager == null) return;
+        Object[] options = {"Cancel", "OK"};
+        int confirm = JOptionPane.showOptionDialog(frame,
+                "Are you sure you want to complete this election?\n"
+                + "Voting will close and results become final.",
+                "Complete Election", JOptionPane.DEFAULT_OPTION,
+                JOptionPane.WARNING_MESSAGE, null, options, options[1]);
+        if (confirm != 1) return;
+        try {
+            manager.completeElection();
+            frame.setCurrentRecord(new ElectionDAO().findById(manager.getElectionId()));
+            ResultsPanel rp = frame.getScreen(VotingAppFrame.SCREEN_RESULTS);
+            rp.setReturnScreen(VotingAppFrame.SCREEN_ADMIN_DASHBOARD);
+            frame.showScreen(VotingAppFrame.SCREEN_RESULTS);
+        } catch (IllegalStateException | SQLException ex) {
+            JOptionPane.showMessageDialog(frame, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     @Override
@@ -782,18 +1478,26 @@ class ElectionManagementPanel extends JPanel implements VotingAppFrame.Refreshab
             if (record != null) {
                 frame.setCurrentRecord(record);
                 statusLabel.setText(record.status);
+                // Voter/candidate lists are editable only while the election is UPCOMING
+                boolean editable = "UPCOMING".equals(record.status);
+                addVoterBtn.setEnabled(editable);
+                addCandBtn.setEnabled(editable);
+                importVoterBtn.setEnabled(editable);
                 switch (record.status) {
                     case "UPCOMING" -> {
                         statusLabel.setForeground(UIConstants.STATUS_UPCOMING);
                         startBtn.setEnabled(true);
+                        completeBtn.setEnabled(false);
                     }
                     case "ACTIVE" -> {
                         statusLabel.setForeground(UIConstants.STATUS_ACTIVE);
                         startBtn.setEnabled(false);
+                        completeBtn.setEnabled(true);
                     }
                     default -> {
                         statusLabel.setForeground(UIConstants.STATUS_COMPLETED);
                         startBtn.setEnabled(false);
+                        completeBtn.setEnabled(false);
                     }
                 }
             }
@@ -803,73 +1507,101 @@ class ElectionManagementPanel extends JPanel implements VotingAppFrame.Refreshab
     }
 }
 
-class ElectionSelectionPanel extends JPanel {
+class ElectionSelectionPanel extends JPanel implements VotingAppFrame.Refreshable {
 
     private final VotingAppFrame frame;
+    private DefaultTableModel tableModel;
+    private JTable            table;
 
     public ElectionSelectionPanel(VotingAppFrame frame) {
         this.frame = frame;
         setBackground(UIConstants.BG_DARK);
-        setLayout(new GridBagLayout());
+        setLayout(new BorderLayout());
+        setBorder(BorderFactory.createEmptyBorder(30, 60, 30, 60));
         buildUI();
     }
 
     private void buildUI() {
-        JPanel card = new UIConstants.RoundedPanel(16, UIConstants.BG_CARD);
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBorder(BorderFactory.createEmptyBorder(48, 48, 48, 48));
+        JPanel header = UIConstants.createHeaderPanel(
+                "Select Election", "← Back",
+                () -> frame.showScreen(VotingAppFrame.SCREEN_ADMIN_DASHBOARD));
+        add(header, BorderLayout.NORTH);
 
-        JLabel header = new JLabel("Start / Select Election");
-        header.setFont(UIConstants.FONT_HEADER);
-        header.setForeground(UIConstants.TEXT_PRIMARY);
-        header.setAlignmentX(Component.CENTER_ALIGNMENT);
-        card.add(header);
-        card.add(Box.createVerticalStrut(40));
+        JLabel hint = new JLabel(
+                "Choose an existing election to make it the current election.");
+        hint.setFont(UIConstants.FONT_BODY);
+        hint.setForeground(UIConstants.TEXT_SECONDARY);
+        JPanel top = new JPanel();
+        top.setOpaque(false);
+        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
+        top.add(hint);
+        top.add(Box.createVerticalStrut(16));
+        add(top, BorderLayout.NORTH);
 
-        JButton btnCreate = UIConstants.createPrimaryButton("Create New Election");
-        btnCreate.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_CREATE_ELECTION));
-        card.add(UIConstants.wrapButton(btnCreate, 48));
-        card.add(Box.createVerticalStrut(12));
+        tableModel = new DefaultTableModel(
+                new String[]{"ID", "Election", "Status", "Action"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int col) { return col == 3; }
+        };
+        table = UIConstants.createStyledTable(tableModel);
+        table.getColumnModel().getColumn(0).setPreferredWidth(70);
+        table.getColumnModel().getColumn(1).setPreferredWidth(420);
+        table.getColumnModel().getColumn(2).setPreferredWidth(150);
 
-        JButton btnExisting = UIConstants.createSecondaryButton("Enter Existing Election ID");
-        btnExisting.addActionListener(e -> enterExistingElection());
-        card.add(UIConstants.wrapButton(btnExisting, 48));
-        card.add(Box.createVerticalStrut(12));
+        TableColumn actionCol = table.getColumnModel().getColumn(3);
+        actionCol.setPreferredWidth(110);
+        actionCol.setMaxWidth(130);
+        actionCol.setCellRenderer(new SelectButtonRenderer());
+        actionCol.setCellEditor(new SelectButtonEditor());
+        add(UIConstants.wrapInScrollPane(table), BorderLayout.CENTER);
 
-        JButton btnBack = UIConstants.createSecondaryButton("Back to Home");
-        btnBack.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_HOME));
-        card.add(UIConstants.wrapButton(btnBack, 48));
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
+        bottom.setOpaque(false);
+        bottom.setBorder(BorderFactory.createEmptyBorder(16, 0, 0, 0));
 
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0;  gbc.gridy = 0;
-        gbc.weightx = 1; gbc.weighty = 1;
-        gbc.anchor = GridBagConstraints.CENTER;
-        add(card, gbc);
+        JButton backBtn = UIConstants.createSecondaryButton("Back");
+        backBtn.setPreferredSize(new Dimension(140, 44));
+        backBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_ADMIN_DASHBOARD));
+        bottom.add(backBtn);
+        add(bottom, BorderLayout.SOUTH);
     }
 
-    private void enterExistingElection() {
-        String input = JOptionPane.showInputDialog(frame,
-                "Enter Election ID:", "Existing Election", JOptionPane.PLAIN_MESSAGE);
-        if (input == null || input.trim().isEmpty()) return;
-
+    private void selectElection(int electionId) {
         try {
-            int electionId = Integer.parseInt(input.trim());
             VotingManager manager = new VotingManager(electionId);
             ElectionDAO.ElectionRecord record = new ElectionDAO().findById(electionId);
-            if (record == null) { showError("Election not found."); return; }
-
             frame.setCurrentManager(manager);
             frame.setCurrentRecord(record);
 
-            switch (record.status) {
-                case "UPCOMING" -> frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT);
-                case "ACTIVE" -> frame.showScreen(VotingAppFrame.SCREEN_VOTING);
-                case "COMPLETED" -> frame.showScreen(VotingAppFrame.SCREEN_ELECTION_DETAILS);
-                default -> showError("Unknown election status: " + record.status);
+            if (record != null && "COMPLETED".equals(record.status)) {
+                // Read-only details screen: no Add/Remove/Start/Complete controls
+                ElectionDetailsPanel dp =
+                        frame.getScreen(VotingAppFrame.SCREEN_ELECTION_DETAILS);
+                dp.setReturnScreen(VotingAppFrame.SCREEN_ADMIN_DASHBOARD);
+                frame.showScreen(VotingAppFrame.SCREEN_ELECTION_DETAILS);
+            } else {
+                frame.showScreen(VotingAppFrame.SCREEN_ADMIN_DASHBOARD);
             }
-        } catch (NumberFormatException ex) {
-            showError("Please enter a valid numeric ID.");
         } catch (IllegalArgumentException ex) {
+            showError(ex.getMessage());
+        } catch (SQLException ex) {
+            showError("Database error: " + ex.getMessage());
+        }
+    }
+
+    @Override
+    public void refresh() {
+        tableModel.setRowCount(0);
+        try {
+            for (ElectionDAO.ElectionRecord record : VotingManager.getAllElections()) {
+                tableModel.addRow(new Object[]{
+                        String.valueOf(record.electionId),
+                        record.name,
+                        record.status,
+                        "Select"
+                });
+            }
+        } catch (IllegalStateException ex) {
             showError(ex.getMessage());
         } catch (SQLException ex) {
             showError("Database error: " + ex.getMessage());
@@ -878,6 +1610,55 @@ class ElectionSelectionPanel extends JPanel {
 
     private void showError(String msg) {
         JOptionPane.showMessageDialog(frame, msg, "Error", JOptionPane.ERROR_MESSAGE);
+    }
+
+    private class SelectButtonRenderer extends JLabel implements TableCellRenderer {
+        SelectButtonRenderer() {
+            setOpaque(true);
+            setFont(new Font("Segoe UI", Font.BOLD, 11));
+            setForeground(Color.WHITE);
+            setBackground(UIConstants.PRIMARY_BLUE);
+            setHorizontalAlignment(SwingConstants.CENTER);
+            setBorder(BorderFactory.createEmptyBorder(4, 12, 4, 12));
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable t, Object val,
+                boolean sel, boolean focus, int row, int col) {
+            setText("Select");
+            return this;
+        }
+    }
+
+    private class SelectButtonEditor extends AbstractCellEditor implements TableCellEditor {
+        private final JButton button;
+
+        SelectButtonEditor() {
+            button = new JButton("Select");
+            button.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            button.setForeground(Color.WHITE);
+            button.setBackground(UIConstants.PRIMARY_BLUE);
+            button.setBorderPainted(false);
+            button.setFocusPainted(false);
+            button.addActionListener(e -> {
+                int row = table.getEditingRow();
+                fireEditingStopped();
+                if (row >= 0 && row < tableModel.getRowCount()) {
+                    SwingUtilities.invokeLater(() ->
+                            selectElection(Integer.parseInt(
+                                    (String) tableModel.getValueAt(row, 0))));
+                }
+            });
+        }
+
+        @Override
+        public Component getTableCellEditorComponent(JTable t, Object val,
+                boolean sel, int row, int col) {
+            return button;
+        }
+
+        @Override
+        public Object getCellEditorValue() { return "Select"; }
     }
 }
 
@@ -916,14 +1697,14 @@ class HomePanel extends JPanel {
         card.add(subtitle);
         card.add(Box.createVerticalStrut(40));
 
-        JButton btnStart = UIConstants.createPrimaryButton("Start / Select Election");
-        btnStart.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_ELECTION_SELECT));
-        card.add(UIConstants.wrapButton(btnStart, 48));
+        JButton btnAdmin = UIConstants.createPrimaryButton("Admin Login");
+        btnAdmin.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_ADMIN_LOGIN));
+        card.add(UIConstants.wrapButton(btnAdmin, 48));
         card.add(Box.createVerticalStrut(12));
 
-        JButton btnHistory = UIConstants.createSecondaryButton("View Previous Elections");
-        btnHistory.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_PREVIOUS_ELECTIONS));
-        card.add(UIConstants.wrapButton(btnHistory, 48));
+        JButton btnVoter = UIConstants.createPrimaryButton("Voter Login");
+        btnVoter.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_VOTER_LOGIN));
+        card.add(UIConstants.wrapButton(btnVoter, 48));
         card.add(Box.createVerticalStrut(12));
 
         JButton btnExit = UIConstants.createSecondaryButton("Exit");
@@ -1157,7 +1938,7 @@ class PreviousElectionsPanel extends JPanel implements VotingAppFrame.Refreshabl
 
         JButton backBtn = UIConstants.createSecondaryButton("Back");
         backBtn.setPreferredSize(new Dimension(100, 44));
-        backBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_HOME));
+        backBtn.addActionListener(e -> frame.showScreen(VotingAppFrame.SCREEN_ADMIN_DASHBOARD));
         bottom.add(backBtn, BorderLayout.WEST);
 
         selectBtn = UIConstants.createPrimaryButton("Select Election");
@@ -1427,6 +2208,21 @@ class ResultsPanel extends JPanel implements VotingAppFrame.Refreshable {
         VotingManager manager = frame.getCurrentManager();
         if (manager == null) return;
 
+        // Final results only — no counts while the election is still running
+        String status;
+        try {
+            status = manager.getStatus();
+        } catch (SQLException ex) {
+            return;
+        }
+        if (!"COMPLETED".equals(status)) {
+            totalVotesLabel.setText("—");
+            registeredVotersLabel.setText("—");
+            turnoutLabel.setText("—");
+            winnerLabel.setText("Not available yet");
+            return;
+        }
+
         try {
             Map<String, Long> tally = manager.getTallyMap();
             Map<String, Candidate> candidates = new LinkedHashMap<>();
@@ -1528,7 +2324,16 @@ final class UIConstants {
     }
 
     public static JTextField createStyledField() {
-        JTextField field = new JTextField();
+        return styleField(new JTextField());
+    }
+
+    public static JPasswordField createStyledPasswordField() {
+        JPasswordField field = new JPasswordField();
+        field.setEchoChar('*');
+        return styleField(field);
+    }
+
+    private static <T extends JTextField> T styleField(T field) {
         field.setFont(FONT_FIELD);
         field.setForeground(TEXT_PRIMARY);
         field.setBackground(BG_FIELD);
@@ -1731,7 +2536,8 @@ class ImportVoterPanel extends JPanel {
         topArea.setOpaque(false);
         topArea.setLayout(new BoxLayout(topArea, BoxLayout.Y_AXIS));
 
-        JLabel instructions = new JLabel("Select a CSV file with columns: Roll Number, Name");
+        JLabel instructions = new JLabel(
+                "Select a CSV file with columns: Roll Number, Name, DOB (dd/MM/yyyy)");
         instructions.setFont(UIConstants.FONT_BODY);
         instructions.setForeground(UIConstants.TEXT_SECONDARY);
         instructions.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -1755,12 +2561,13 @@ class ImportVoterPanel extends JPanel {
 
         center.add(topArea, BorderLayout.NORTH);
 
-        previewModel = new DefaultTableModel(new String[]{"Roll No.", "Name"}, 0) {
+        previewModel = new DefaultTableModel(new String[]{"Roll No.", "Name", "DOB"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         JTable previewTable = UIConstants.createStyledTable(previewModel);
         previewTable.getColumnModel().getColumn(0).setPreferredWidth(120);
-        previewTable.getColumnModel().getColumn(1).setPreferredWidth(400);
+        previewTable.getColumnModel().getColumn(1).setPreferredWidth(320);
+        previewTable.getColumnModel().getColumn(2).setPreferredWidth(140);
         center.add(UIConstants.wrapInScrollPane(previewTable), BorderLayout.CENTER);
 
         add(center, BorderLayout.CENTER);
@@ -1808,17 +2615,23 @@ class ImportVoterPanel extends JPanel {
             if (headerLine == null) { showError("The CSV file is empty."); return; }
 
             String[] headers = headerLine.split(",", -1);
-            if (headers.length < 2) {
-                showError("CSV header must have at least two columns: Roll Number, Name");
+            if (headers.length < 3) {
+                showError("""
+                          CSV must have three columns: Roll Number, Name, DOB.\n
+                          Example header:\n
+                          Roll Number,Name,DOB\n""");
                 return;
             }
             String col0 = headers[0].trim().toLowerCase().replaceAll("[^a-z0-9]", "");
             String col1 = headers[1].trim().toLowerCase().replaceAll("[^a-z0-9]", "");
+            String col2 = headers[2].trim().toLowerCase().replaceAll("[^a-z0-9]", "");
             if (!(col0.contains("roll") || col0.contains("id") || col0.contains("number"))
-                    || !(col1.contains("name"))) {
+                    || !col1.contains("name")
+                    || !(col2.contains("dob") || col2.contains("birth"))) {
                 showError("""
-                          CSV header must contain 'Roll Number' and 'Name' columns.\n
-                          Found: \"""" + headers[0].trim() + "\", \"" + headers[1].trim() + "\"");
+                          CSV header must contain 'Roll Number', 'Name' and 'DOB' columns.\n
+                          Found: \"""" + headers[0].trim() + "\", \""
+                        + headers[1].trim() + "\", \"" + headers[2].trim() + "\"");
                 return;
             }
 
@@ -1830,13 +2643,14 @@ class ImportVoterPanel extends JPanel {
                 if (trimmed.isEmpty()) continue;
 
                 String[] parts = trimmed.split(",", -1);
-                if (parts.length < 2) {
+                if (parts.length < 3) {
                     errors.add("Line " + lineNum + ": not enough columns.");
                     continue;
                 }
 
                 String rollStr = parts[0].trim();
                 String name    = parts[1].trim();
+                String dobStr  = parts[2].trim();
 
                 int rollNo;
                 try {
@@ -1857,8 +2671,17 @@ class ImportVoterPanel extends JPanel {
                     continue;
                 }
 
-                parsedVoters.add(new Voter(String.valueOf(rollNo), name));
-                previewModel.addRow(new Object[]{ rollNo, name });
+                LocalDate dob;
+                try {
+                    dob = VotingManager.parseDateOfBirth(dobStr);
+                } catch (java.time.format.DateTimeParseException e) {
+                    errors.add("Line " + lineNum + ": Invalid DOB (\"" + dobStr
+                            + "\") — use dd/MM/yyyy.");
+                    continue;
+                }
+
+                parsedVoters.add(new Voter(String.valueOf(rollNo), name, dob));
+                previewModel.addRow(new Object[]{ rollNo, name, dobStr });
             }
         } catch (java.io.IOException ex) {
             showError("Cannot read file: " + ex.getMessage());
@@ -1891,22 +2714,34 @@ class ImportVoterPanel extends JPanel {
         VotingManager manager = frame.getCurrentManager();
         if (manager == null || parsedVoters.isEmpty()) return;
         try {
-            int[] counts = manager.importVoters(parsedVoters);
-            int enrolled = parsedVoters.size() - counts[2];
+            VotingManager.ImportResult result = manager.importVoters(parsedVoters);
+            int enrolled = parsedVoters.size() - result.alreadyEnrolled;
 
             StringBuilder msg = new StringBuilder("Import complete!\n\n");
             msg.append("• ").append(enrolled).append(" voter(s) enrolled in this election.\n");
-            if (counts[0] > 0)
-                msg.append("• ").append(counts[0]).append(" new voter(s) registered.\n");
-            if (counts[1] > 0)
-                msg.append("• ").append(counts[1]).append(" voter(s) already existed (reused).\n");
-            if (counts[2] > 0)
-                msg.append("• ").append(counts[2]).append(" voter(s) were already in this election (skipped).\n");
+            if (result.newlyRegistered > 0)
+                msg.append("• ").append(result.newlyRegistered).append(" new voter(s) registered.\n");
+            if (result.alreadyExisted > 0)
+                msg.append("• ").append(result.alreadyExisted)
+                   .append(" voter(s) already existed (reused).\n");
+            if (result.alreadyEnrolled > 0)
+                msg.append("• ").append(result.alreadyEnrolled)
+                   .append(" voter(s) were already in this election (skipped).\n");
+
+            if (!result.generatedPins.isEmpty()) {
+                msg.append("\nInitial PINs to distribute:\n");
+                result.generatedPins.forEach((id, pin) ->
+                        msg.append("   Voter ").append(id).append("  →  ").append(pin).append("\n"));
+                msg.append("\nThese are shown once. Only hashes are stored.");
+            }
 
             JOptionPane.showMessageDialog(frame, msg.toString(),
                     "Import Successful", JOptionPane.INFORMATION_MESSAGE);
             clearState();
             frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT);
+        } catch (IllegalStateException ex) {
+            JOptionPane.showMessageDialog(frame, ex.getMessage(),
+                    "Access Denied", JOptionPane.ERROR_MESSAGE);
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(frame,
                     "Database error during import: " + ex.getMessage(),
@@ -2103,11 +2938,23 @@ public class VotingAppFrame extends JFrame {
     public static final String SCREEN_CANDIDATES         = "CANDIDATES";
     public static final String SCREEN_VOTERS             = "VOTERS";
     public static final String SCREEN_VOTING             = "VOTING";
+    public static final String SCREEN_VOTER_LOGIN        = "VOTER_LOGIN";
+    public static final String SCREEN_VOTER_ELECTIONS   = "VOTER_ELECTIONS";
+    public static final String SCREEN_ADMIN_LOGIN       = "ADMIN_LOGIN";
+    public static final String SCREEN_ADMIN_DASHBOARD   = "ADMIN_DASHBOARD";
     public static final String SCREEN_RESULTS            = "RESULTS";
     public static final String SCREEN_PREVIOUS_ELECTIONS = "PREVIOUS_ELECTIONS";
     public static final String SCREEN_ELECTION_DETAILS   = "ELECTION_DETAILS";
     public static final String SCREEN_RE_ELECTION        = "RE_ELECTION";
     public static final String SCREEN_PREVIOUS_ELECTION_ACTION = "PREVIOUS_ELECTION_ACTION";
+
+    // Administrative screens. Guarded in showScreen() as well as in VotingManager,
+    // so an unauthenticated session cannot reach election management.
+    private static final Set<String> ADMIN_ONLY_SCREENS = Set.of(
+            SCREEN_ADMIN_DASHBOARD, SCREEN_ELECTION_SELECT, SCREEN_CREATE_ELECTION,
+            SCREEN_ELECTION_MGMT, SCREEN_ADD_CANDIDATE, SCREEN_ADD_VOTER,
+            SCREEN_IMPORT_VOTERS, SCREEN_PREVIOUS_ELECTIONS, SCREEN_ELECTION_DETAILS,
+            SCREEN_RE_ELECTION, SCREEN_PREVIOUS_ELECTION_ACTION);
 
     private final CardLayout            cardLayout;
     private final JPanel                cardPanel;
@@ -2142,6 +2989,10 @@ public class VotingAppFrame extends JFrame {
         addScreen(SCREEN_CANDIDATES,         new CandidatesPanel(this));
         addScreen(SCREEN_VOTERS,             new VotersPanel(this));
         addScreen(SCREEN_VOTING,             new VotingPanel(this));
+        addScreen(SCREEN_VOTER_LOGIN,        new VoterLoginPanel(this));
+        addScreen(SCREEN_VOTER_ELECTIONS,   new VoterElectionListPanel(this));
+        addScreen(SCREEN_ADMIN_LOGIN,       new AdminLoginPanel(this));
+        addScreen(SCREEN_ADMIN_DASHBOARD,   new AdminDashboardPanel(this));
         addScreen(SCREEN_RESULTS,            new ResultsPanel(this));
         addScreen(SCREEN_PREVIOUS_ELECTIONS, new PreviousElectionsPanel(this));
         addScreen(SCREEN_ELECTION_DETAILS,   new ElectionDetailsPanel(this));
@@ -2157,6 +3008,14 @@ public class VotingAppFrame extends JFrame {
     }
 
     public void showScreen(String name) {
+        // Central access control — mirrors the guards inside VotingManager
+        if (ADMIN_ONLY_SCREENS.contains(name) && !VotingManager.isAdminAuthenticated()) {
+            VotingManager.adminLogout();
+            JOptionPane.showMessageDialog(this,
+                    "Administrator login is required for this action.",
+                    "Access Denied", JOptionPane.WARNING_MESSAGE);
+            name = SCREEN_HOME;
+        }
         JPanel panel = screens.get(name);
         if (panel instanceof Refreshable refreshable)
             refreshable.refresh();
@@ -2189,6 +3048,11 @@ public class VotingAppFrame extends JFrame {
             UIManager.put("TextField.background",         UIConstants.BG_FIELD);
             UIManager.put("TextField.foreground",         UIConstants.TEXT_PRIMARY);
             UIManager.put("TextField.caretForeground",    UIConstants.TEXT_PRIMARY);
+            UIManager.put("PasswordField.background",     UIConstants.BG_FIELD);
+            UIManager.put("PasswordField.foreground",     UIConstants.TEXT_PRIMARY);
+            UIManager.put("PasswordField.caretForeground", UIConstants.TEXT_PRIMARY);
+            UIManager.put("PasswordField.selectionBackground", UIConstants.PRIMARY_BLUE);
+            UIManager.put("PasswordField.selectionForeground", UIConstants.TEXT_PRIMARY);
 
             new VotingAppFrame().setVisible(true);
         });
@@ -2203,6 +3067,7 @@ class VotingPanel extends JPanel implements VotingAppFrame.Refreshable {
     private DefaultTableModel tableModel;
     private JTable            table;
     private JLabel            electionNameLabel;
+    private JLabel            voterLabel;
     private JLabel            statusValueLabel;
     private JLabel            timeRemainingLabel;
     private JLabel            votesCastLabel;
@@ -2223,10 +3088,22 @@ class VotingPanel extends JPanel implements VotingAppFrame.Refreshable {
 
         JPanel headerRow = new JPanel(new BorderLayout());
         headerRow.setOpaque(false);
+
+        JPanel titleBox = new JPanel();
+        titleBox.setOpaque(false);
+        titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
         electionNameLabel = new JLabel("Election — Voting");
         electionNameLabel.setFont(UIConstants.FONT_HEADER);
         electionNameLabel.setForeground(UIConstants.TEXT_PRIMARY);
-        headerRow.add(electionNameLabel, BorderLayout.WEST);
+        electionNameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        titleBox.add(electionNameLabel);
+        titleBox.add(Box.createVerticalStrut(4));
+        voterLabel = new JLabel(" ");
+        voterLabel.setFont(UIConstants.FONT_SMALL);
+        voterLabel.setForeground(UIConstants.ACCENT_GREEN);
+        voterLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        titleBox.add(voterLabel);
+        headerRow.add(titleBox, BorderLayout.WEST);
 
         JLabel openBadge = new JLabel("  OPEN  ");
         openBadge.setFont(UIConstants.FONT_SMALL);
@@ -2246,11 +3123,11 @@ class VotingPanel extends JPanel implements VotingAppFrame.Refreshable {
 
         statusValueLabel   = new JLabel("Voting in progress");
         timeRemainingLabel = new JLabel("--:--");
-        votesCastLabel     = new JLabel("0 / 0");
+        votesCastLabel     = new JLabel("—");
 
         statsRow.add(createStatCard("Status",         statusValueLabel));
         statsRow.add(createStatCard("Time Remaining", timeRemainingLabel));
-        statsRow.add(createStatCard("Votes Cast",     votesCastLabel));
+        statsRow.add(createStatCard("Your Vote",        votesCastLabel));
 
         top.add(statsRow);
         top.add(Box.createVerticalStrut(20));
@@ -2281,6 +3158,14 @@ class VotingPanel extends JPanel implements VotingAppFrame.Refreshable {
         JPanel leftNav = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         leftNav.setOpaque(false);
 
+        JButton backBtn = UIConstants.createSecondaryButton("← Back");
+        backBtn.setPreferredSize(new Dimension(120, 40));
+        backBtn.addActionListener(e -> {
+            stopTimer();
+            frame.showScreen(VotingAppFrame.SCREEN_VOTER_ELECTIONS);
+        });
+        leftNav.add(backBtn);
+
         JButton viewCandBtn = UIConstants.createSecondaryButton("View Candidates");
         viewCandBtn.setPreferredSize(new Dimension(160, 40));
         viewCandBtn.addActionListener(e -> {
@@ -2290,33 +3175,16 @@ class VotingPanel extends JPanel implements VotingAppFrame.Refreshable {
         });
         leftNav.add(viewCandBtn);
 
-        JButton viewVoterBtn = UIConstants.createSecondaryButton("View Voters");
-        viewVoterBtn.setPreferredSize(new Dimension(140, 40));
-        viewVoterBtn.addActionListener(e -> {
-            VotersPanel vp = frame.getScreen(VotingAppFrame.SCREEN_VOTERS);
-            vp.setReturnScreen(VotingAppFrame.SCREEN_VOTING);
-            frame.showScreen(VotingAppFrame.SCREEN_VOTERS);
+        JButton logoutBtn = UIConstants.createSecondaryButton("Logout");
+        logoutBtn.setPreferredSize(new Dimension(120, 40));
+        logoutBtn.addActionListener(e -> {
+            stopTimer();
+            VotingManager.logout();
+            frame.showScreen(VotingAppFrame.SCREEN_HOME);
         });
-        leftNav.add(viewVoterBtn);
-
-        JButton liveResultsBtn = UIConstants.createSecondaryButton("Live Results");
-        liveResultsBtn.setPreferredSize(new Dimension(140, 40));
-        liveResultsBtn.addActionListener(e -> {
-            ResultsPanel rp = frame.getScreen(VotingAppFrame.SCREEN_RESULTS);
-            rp.setReturnScreen(VotingAppFrame.SCREEN_VOTING);
-            frame.showScreen(VotingAppFrame.SCREEN_RESULTS);
-        });
-        leftNav.add(liveResultsBtn);
+        leftNav.add(logoutBtn);
 
         bottom.add(leftNav, BorderLayout.WEST);
-
-        JPanel rightAction = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        rightAction.setOpaque(false);
-        JButton endBtn = UIConstants.createDangerButton("End Voting");
-        endBtn.setPreferredSize(new Dimension(140, 40));
-        endBtn.addActionListener(e -> endVoting());
-        rightAction.add(endBtn);
-        bottom.add(rightAction, BorderLayout.EAST);
 
         add(bottom, BorderLayout.SOUTH);
     }
@@ -2341,44 +3209,28 @@ class VotingPanel extends JPanel implements VotingAppFrame.Refreshable {
     }
 
     private void handleVote(String candidateId) {
-        String voterId = JOptionPane.showInputDialog(frame,
-                "Enter your Voter ID:", "Cast Vote", JOptionPane.PLAIN_MESSAGE);
-        if (voterId == null || voterId.trim().isEmpty()) return;
-
         VotingManager manager = frame.getCurrentManager();
         if (manager == null) return;
+
+        if (!VotingManager.getSession().isLoggedIn()) {
+            JOptionPane.showMessageDialog(frame, "Please log in before casting your vote.",
+                    "Login Required", JOptionPane.WARNING_MESSAGE);
+            frame.showScreen(VotingAppFrame.SCREEN_VOTER_LOGIN);
+            return;
+        }
+
         try {
-            manager.castVote(voterId.trim(), candidateId);
+            manager.castVote(candidateId);
             JOptionPane.showMessageDialog(frame, "Vote submitted successfully!",
                     "Success", JOptionPane.INFORMATION_MESSAGE);
-            refreshStats();
+            // Return to the voter's election list so they are never stranded here
+            stopTimer();
+            frame.showScreen(VotingAppFrame.SCREEN_VOTER_ELECTIONS);
         } catch (VotingException ex) {
             JOptionPane.showMessageDialog(frame, ex.getMessage(),
                     "Vote Rejected", JOptionPane.WARNING_MESSAGE);
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(frame, "Database error: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void endVoting() {
-        Object[] options = {"Cancel", "OK"};
-        int confirm = JOptionPane.showOptionDialog(frame,
-                "Are you sure you want to end voting?", "End Voting",
-                JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
-                null, options, options[1]);
-        if (confirm != 1) return;
-
-        VotingManager manager = frame.getCurrentManager();
-        if (manager == null) return;
-        try {
-            electionDAO.updateStatus(manager.getElectionId(), ElectionDAO.Status.COMPLETED);
-            stopTimer();
-            ResultsPanel rp = frame.getScreen(VotingAppFrame.SCREEN_RESULTS);
-            rp.setReturnScreen(VotingAppFrame.SCREEN_HOME);
-            frame.showScreen(VotingAppFrame.SCREEN_RESULTS);
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(frame, "Error ending voting: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -2409,7 +3261,7 @@ class VotingPanel extends JPanel implements VotingAppFrame.Refreshable {
                 JOptionPane.showMessageDialog(frame, "Election voting window has ended.",
                         "Time's Up", JOptionPane.INFORMATION_MESSAGE);
                 ResultsPanel rp = frame.getScreen(VotingAppFrame.SCREEN_RESULTS);
-                rp.setReturnScreen(VotingAppFrame.SCREEN_HOME);
+                rp.setReturnScreen(VotingAppFrame.SCREEN_VOTER_ELECTIONS);
                 frame.showScreen(VotingAppFrame.SCREEN_RESULTS);
                 return;
             }
@@ -2424,8 +3276,12 @@ class VotingPanel extends JPanel implements VotingAppFrame.Refreshable {
     private void refreshStats() {
         VotingManager manager = frame.getCurrentManager();
         if (manager == null) return;
+        if (!VotingManager.getSession().isLoggedIn()) {
+            votesCastLabel.setText("—");
+            return;
+        }
         try {
-            votesCastLabel.setText(manager.getVotes().size() + " / " + manager.getVoters().size());
+            votesCastLabel.setText(manager.hasCurrentVoterVoted() ? "Voted" : "Not voted");
         } catch (SQLException ignored) { }
     }
 
@@ -2435,6 +3291,12 @@ class VotingPanel extends JPanel implements VotingAppFrame.Refreshable {
         if (manager == null) return;
         try {
             electionNameLabel.setText(manager.getElectionName() + " — Voting");
+            VoterSession session = VotingManager.getSession();
+            voterLabel.setText(session.isLoggedIn()
+                    ? "Signed in as " + session.getVoterName() + " (ID " + session.getVoterId() + ")"
+                    : "Not signed in — login required to vote");
+            if (!session.isLoggedIn())
+                voterLabel.setForeground(UIConstants.STATUS_UPCOMING);
             tableModel.setRowCount(0);
             for (Candidate c : manager.getCandidates()) {
                 tableModel.addRow(new Object[]{

@@ -2,7 +2,9 @@ package com.voting;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Scanner;
 
@@ -18,23 +20,60 @@ public class Main {
 
     public static void main(String[] args) {
         printBanner();
-        mainMenuLoop();
+        boolean running = true;
+        while (running) {
+            if (!VotingManager.isAdminAuthenticated() && !adminLoginPrompt())
+                running = false;
+            if (running)
+                running = mainMenuLoop();
+        }
         System.out.println("  Goodbye!\n");
+    }
+
+    // ── Admin Login ───────────────────────────────────────────────────────
+
+    private static boolean adminLoginPrompt() {
+        System.out.println("  ── Admin Login ──\n");
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            System.out.print("  Admin ID : ");
+            String adminId = sc.nextLine().trim();
+            System.out.print("  Password : ");
+            String password = sc.nextLine();
+            try {
+                if (VotingManager.adminLogin(adminId, password)) {
+                    System.out.printf("%n  ✓  Logged in as '%s'.%n%n",
+                            VotingManager.getAuthenticatedAdminId());
+                    return true;
+                }
+            } catch (SQLException e) {
+                System.out.println("  ✗ Database error: " + e.getMessage() + "\n");
+                return false;
+            }
+            System.out.printf("  ✗  Invalid admin ID or password. Attempt %d of 3.%n%n",
+                    attempt);
+        }
+        return false;
     }
 
     // ── Main Menu ────────────────────────────────────────────────────────
 
-    private static void mainMenuLoop() {
-        boolean running = true;
-        while (running) {
+    private static boolean mainMenuLoop() {
+        while (true) {
             printMainMenu();
             String choice = sc.nextLine().trim();
             System.out.println();
             switch (choice) {
                 case "1" -> startOrSelectElection();
                 case "2" -> viewPreviousElections();
-                case "3" -> running = false;
-                default  -> System.out.println("  Invalid option. Please choose 1-3.\n");
+                case "3" -> {
+                    VotingManager.adminLogout();
+                    System.out.println("  ✓  Logged out.\n");
+                    return true;
+                }
+                case "4" -> {
+                    return false;
+                }
+                default  -> System.out.println("  Invalid option. Please choose 1-4.\n");
             }
         }
     }
@@ -45,7 +84,8 @@ public class Main {
         System.out.println("├─────────────────────────────────────────┤");
         System.out.println("│  1. Start / Select Election             │");
         System.out.println("│  2. View Previous Elections             │");
-        System.out.println("│  3. Exit                                │");
+        System.out.println("│  3. Logout                              │");
+        System.out.println("│  4. Exit                                │");
         System.out.println("└─────────────────────────────────────────┘");
         System.out.print("  Choose an option: ");
     }
@@ -497,9 +537,23 @@ public class Main {
 
         System.out.print("  Enter Voter Name : ");
         String name = sc.nextLine().trim();
+
+        LocalDate dob = null;
+        while (dob == null) {
+            System.out.print("  Enter Date of Birth (dd/MM/yyyy) : ");
+            try {
+                dob = VotingManager.parseDateOfBirth(sc.nextLine());
+            } catch (DateTimeParseException e) {
+                System.out.println("  Invalid date — use dd/MM/yyyy (e.g. 05/12/2000).");
+            }
+        }
+
         try {
-            manager.registerVoter(new Voter(id, name));
-            System.out.println("  ✓ Voter registered.\n");
+            String pin = manager.registerVoter(new Voter(id, name, dob));
+            if (pin != null)
+                System.out.printf("  ✓ Voter registered. Initial PIN: %s%n%n", pin);
+            else
+                System.out.println("  ✓ Voter already existed — enrolled in this election.\n");
         } catch (IllegalArgumentException e) {
             System.out.println("  ✗ Could not register voter: " + e.getMessage() + "\n");
         } catch (SQLException | VotingException e) {

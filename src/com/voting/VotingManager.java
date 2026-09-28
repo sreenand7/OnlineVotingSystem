@@ -5,6 +5,7 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -16,10 +17,22 @@ public class VotingManager {
     private static final DateTimeFormatter DISPLAY_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    private final ElectionDAO electionDAO = new ElectionDAO();
-    private final VoterDAO voterDAO = new VoterDAO();
-    private final CandidateDAO candidateDAO = new CandidateDAO();
-    private final VoteDAO voteDAO = new VoteDAO();
+    // DOB is entered as dd/MM/yyyy but the generated PIN uses MMDDYYYY
+    public static final DateTimeFormatter DOB_INPUT_FMT =
+            DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter PIN_DOB_FMT =
+            DateTimeFormatter.ofPattern("MMddyyyy");
+
+    // DAOs are stateless helpers, so they are shared rather than per-election.
+    // This lets authentication run before any election has been selected.
+    private static final ElectionDAO  electionDAO  = new ElectionDAO();
+    private static final VoterDAO    voterDAO    = new VoterDAO();
+    private static final CandidateDAO candidateDAO = new CandidateDAO();
+    private static final VoteDAO     voteDAO     = new VoteDAO();
+    private static final AdminDAO    adminDAO    = new AdminDAO();
+
+    private static final VoterSession session      = VoterSession.getInstance();
+    private static final AdminSession adminSession = AdminSession.getInstance();
 
     private final int electionId;
     private int durationMinutes;
@@ -32,6 +45,7 @@ public class VotingManager {
     // Creates a new election, optionally as a re-election of a parent
     public VotingManager(String electionName, int durationMinutes, Integer parentElectionId)
             throws SQLException {
+        requireAdmin();
         if (electionName == null || electionName.isBlank())
             throw new IllegalArgumentException("Election name must not be null or blank.");
         if (durationMinutes <= 0)
@@ -46,6 +60,7 @@ public class VotingManager {
     // Creates an election with an explicit active time window (for testing)
     public VotingManager(String electionName, LocalDateTime electionStart, LocalDateTime electionEnd)
             throws SQLException {
+        requireAdmin();
         if (electionName == null || electionName.isBlank())
             throw new IllegalArgumentException("Election name must not be null or blank.");
         if (electionStart == null || electionEnd == null)
@@ -57,7 +72,7 @@ public class VotingManager {
         electionDAO.updateStatus(electionId, ElectionDAO.Status.ACTIVE);
     }
 
-    // Attaches to an existing election row
+    // Attaches to an existing election row. Reachable by voters too, so no admin guard.
     public VotingManager(int electionId) throws SQLException {
         ElectionDAO.ElectionRecord record = electionDAO.findById(electionId);
         if (record == null)
@@ -72,6 +87,7 @@ public class VotingManager {
     // ── Election lifecycle ────────────────────────────────────────────────
 
     public synchronized void startElection() throws SQLException {
+        requireAdmin();
         if (durationMinutes <= 0)
             throw new IllegalStateException(
                     "No voting duration set. Use startElection(int durationMinutes).");
@@ -79,6 +95,7 @@ public class VotingManager {
     }
 
     public synchronized void startElection(int durationMinutes) throws SQLException {
+        requireAdmin();
         if (durationMinutes <= 0)
             throw new IllegalArgumentException("Duration must be greater than 0 minutes.");
         doStartElection(durationMinutes);
@@ -106,34 +123,236 @@ public class VotingManager {
                 && !now.isAfter(record.endTime);
     }
 
+    // Administrative action: ACTIVE -> COMPLETED.
+    // Logout never does this, and voters have no way to reach it.
+    public synchronized void completeElection() throws SQLException {
+        requireAdmin();
+        ElectionDAO.ElectionRecord record = requireElection();
+        if (!"ACTIVE".equals(record.status))
+            throw new IllegalStateException(
+                    "Only an ACTIVE election can be completed (current status: "
+                    + record.status + ").");
+        electionDAO.updateStatus(electionId, ElectionDAO.Status.COMPLETED);
+    }
+
     // ── Registration ──────────────────────────────────────────────────────
 
-    public synchronized void registerVoter(Voter voter)
+    // Registers a voter and enrols them in this election. A new voter gets an
+    // initial PIN generated from their first name and date of birth.
+    // Returns the generated plaintext PIN, or null if the voter already existed.
+    public synchronized String registerVoter(Voter voter)
             throws SQLException, VoterNotFoundException {
+        requireAdmin();
+        requireUpcoming("add a voter to");
         Objects.requireNonNull(voter, "Voter must not be null.");
         int voterId = parseVoterId(voter.getVoterId());
 
-        if (!voterDAO.voterExists(voterId))
-            voterDAO.registerVoter(voterId, voter.getName());
+        String generatedPin = null;
+        if (!voterDAO.voterExists(voterId)) {
+            if (!voter.hasDateOfBirth())
+                throw new IllegalArgumentException(
+                        "A date of birth is required to generate the voter's initial PIN.");
+            generatedPin = generateInitialPin(voter.getName(), voter.getDateOfBirth());
+            voterDAO.registerVoter(voterId, voter.getName(), voter.getDateOfBirth(),
+                    PasswordHasher.hash(generatedPin));
+        }
 
         boolean alreadyEnrolled = voterDAO.getVotersForElection(electionId).stream()
                 .anyMatch(v -> v.getVoterId().equals(String.valueOf(voterId)));
         if (!alreadyEnrolled)
             voterDAO.addVoterToElection(electionId, voterId);
+
+        return generatedPin;
     }
 
-    public synchronized int[] importVoters(List<Voter> voters) throws SQLException {
+    public synchronized Candidate registerCandidate(String name, String politicalParty)
+            throws SQLException {
+        requireAdmin();
+        requireUpcoming("add a candidate to");
+        Objects.requireNonNull(name, "Candidate name must not be null.");
+        Objects.requireNonNull(politicalParty, "Candidate party must not be null.");
+        int candidateId = candidateDAO.addCandidate(electionId, name, politicalParty);
+        return new Candidate(String.valueOf(candidateId), name, politicalParty);
+    }
+
+    // ── Authentication ────────────────────────────────────────────────────
+    // Static: identifying a user must not depend on any election.
+
+    public static VoterSession getSession() {
+        return session;
+    }
+
+    public static void logout() {
+        session.clear();
+    }
+
+    // Returns true on success, false on a wrong ID or password.
+    public static boolean adminLogin(String adminId, String password) throws SQLException {
+        if (adminId == null || adminId.isBlank() || password == null || password.isEmpty())
+            return false;
+        AdminDAO.AdminRecord admin = adminDAO.findAdmin(adminId.trim());
+        if (admin == null) return false;
+        if (!PasswordHasher.verify(password, admin.passwordHash)) return false;
+        adminSession.start(admin.adminId);
+        return true;
+    }
+
+    public static void adminLogout() {
+        adminSession.clear();
+    }
+
+    public static boolean isAdminAuthenticated() {
+        return adminSession.isLoggedIn();
+    }
+
+    public static String getAuthenticatedAdminId() {
+        return adminSession.getAdminId();
+    }
+
+    // True when the voter exists and a PIN was generated for them
+    public static boolean hasPin(String voterId) throws SQLException, VoterNotFoundException {
+        Voter voter = voterDAO.findByVoterId(parseVoterIdStatic(voterId));
+        if (voter == null) throw new VoterNotFoundException(voterId);
+        return voter.hasPassword();
+    }
+
+    // Returns true on success, false on a wrong PIN. Throws if the voter does not exist.
+    public static boolean login(String voterId, String pin)
+            throws SQLException, VoterNotFoundException {
+        int id = parseVoterIdStatic(voterId);
+        Voter voter = voterDAO.findByVoterId(id);
+        if (voter == null) throw new VoterNotFoundException(voterId);
+        if (!voter.hasPassword()) return false;
+
+        if (!PasswordHasher.verify(pin, voter.getPasswordHash()))
+            return false;
+
+        session.start(id, voter.getName());
+        return true;
+    }
+
+    // Lets the logged-in voter replace their own PIN. The current PIN must verify first.
+    // PINs are trimmed and lowercased to match the generated initial-PIN format,
+    // and may mix letters and digits (minimum 4 characters).
+    public static void changePin(String currentPin, String newPin, String confirmPin)
+            throws SQLException, VotingException {
+        if (!session.isLoggedIn())
+            throw new IllegalStateException("No voter is logged in. Please log in first.");
+
+        String current = normalizePin(currentPin);
+        String fresh   = normalizePin(newPin);
+        String confirm = normalizePin(confirmPin);
+
+        if (fresh == null || fresh.length() < 4)
+            throw new IllegalArgumentException("PIN must be at least 4 characters.");
+        if (!fresh.equals(confirm))
+            throw new IllegalArgumentException("New PIN and confirmation do not match.");
+
+        int voterId = session.getVoterId();
+        Voter voter = voterDAO.findByVoterId(voterId);
+        if (voter == null || !voter.hasPassword())
+            throw new VoterNotFoundException(String.valueOf(voterId));
+        if (!PasswordHasher.verify(current, voter.getPasswordHash()))
+            throw new VotingException("Current PIN is incorrect.");
+
+        voterDAO.updatePasswordHash(voterId, PasswordHasher.hash(fresh));
+    }
+
+    private static String normalizePin(String pin) {
+        return pin == null ? null : pin.trim().toLowerCase(Locale.ROOT);
+    }
+
+    // Active elections this logged-in voter is enrolled in and can still vote in
+    public static List<ElectionDAO.VoterElection> getEligibleActiveElections() throws SQLException {
+        if (!session.isLoggedIn())
+            throw new IllegalStateException("No voter is logged in. Please log in first.");
+        return electionDAO.getActiveElectionsForVoter(session.getVoterId());
+    }
+
+    // Parses dd/MM/yyyy; throws DateTimeParseException on bad input
+    public static LocalDate parseDateOfBirth(String text) {
+        return LocalDate.parse(text.trim(), DOB_INPUT_FMT);
+    }
+
+    // Initial PIN rule: first name (lowercase) + DOB as MMDDYYYY.
+    // "Rahul Kumar" + 05/12/2000 -> "rahul05122000"
+    public static String generateInitialPin(String name, LocalDate dateOfBirth) {
+        if (name == null || name.isBlank())
+            throw new IllegalArgumentException("Voter name must not be null or blank.");
+        if (dateOfBirth == null)
+            throw new IllegalArgumentException("Date of birth must not be null.");
+        String firstName = name.trim().split("\\s+")[0].toLowerCase(Locale.ROOT);
+        return firstName + dateOfBirth.format(PIN_DOB_FMT);
+    }
+
+    private static void requireAdmin() {
+        if (!adminSession.isLoggedIn())
+            throw new IllegalStateException(
+                    "Administrator login is required for this action.");
+    }
+
+    // Voter and candidate lists are frozen once voting starts. Only an UPCOMING
+    // election can be edited — this is the real guard, not just the GUI buttons.
+    private void requireUpcoming(String action) throws SQLException {
+        String status = requireElection().status;
+        if (!"UPCOMING".equals(status))
+            throw new IllegalStateException("Cannot " + action + " a " + status
+                    + " election. Only an UPCOMING election can be modified.");
+    }
+
+    // Final artefacts (results, exports) exist only once voting has closed.
+    private void requireCompleted(String action) throws SQLException {
+        String status = requireElection().status;
+        if (!"COMPLETED".equals(status))
+            throw new IllegalStateException("Cannot " + action + " a " + status
+                    + " election. Results are available once the election is COMPLETED.");
+    }
+
+    public synchronized String getStatus() throws SQLException {
+        return requireElection().status;
+    }
+
+    private static int parseVoterIdStatic(String voterId) throws VoterNotFoundException {
+        try {
+            return Integer.parseInt(voterId);
+        } catch (NumberFormatException e) {
+            throw new VoterNotFoundException(voterId);
+        }
+    }
+
+    // Imports voters from a parsed CSV. Existing global voters are reused and never
+    // duplicated. Returns counts plus the generated PINs for newly created voters.
+    public synchronized ImportResult importVoters(List<Voter> voters) throws SQLException {
+        requireAdmin();
+        requireUpcoming("import voters into");
         int newlyRegistered = 0;
         int alreadyExisted  = 0;
         int alreadyEnrolled = 0;
+        Map<String, String> generatedPins = new LinkedHashMap<>();
 
         for (Voter voter : voters) {
             int voterId = Integer.parseInt(voter.getVoterId());
             if (!voterDAO.voterExists(voterId)) {
-                voterDAO.registerVoter(voterId, voter.getName());
+                if (!voter.hasDateOfBirth())
+                    throw new IllegalArgumentException(
+                            "Voter " + voterId + " has no date of birth, so no initial PIN "
+                            + "can be generated.");
+                String pin = generateInitialPin(voter.getName(), voter.getDateOfBirth());
+                voterDAO.registerVoter(voterId, voter.getName(), voter.getDateOfBirth(),
+                        PasswordHasher.hash(pin));
+                generatedPins.put(voter.getVoterId(), pin);
                 newlyRegistered++;
             } else {
                 alreadyExisted++;
+                // Pre-existing voter with no PIN: the CSV DOB lets us issue one once.
+                // An existing PIN is never overwritten.
+                Voter existing = voterDAO.findByVoterId(voterId);
+                if (existing != null && !existing.hasPassword() && voter.hasDateOfBirth()) {
+                    String pin = generateInitialPin(voter.getName(), voter.getDateOfBirth());
+                    voterDAO.updateVoterCredentials(voterId, voter.getDateOfBirth(),
+                            PasswordHasher.hash(pin));
+                    generatedPins.put(voter.getVoterId(), pin);
+                }
             }
             if (!voterDAO.isVoterInElection(electionId, voterId)) {
                 voterDAO.addVoterToElection(electionId, voterId);
@@ -141,18 +360,32 @@ public class VotingManager {
                 alreadyEnrolled++;
             }
         }
-        return new int[]{ newlyRegistered, alreadyExisted, alreadyEnrolled };
+        return new ImportResult(newlyRegistered, alreadyExisted, alreadyEnrolled, generatedPins);
     }
 
-    public synchronized Candidate registerCandidate(String name, String politicalParty)
-            throws SQLException {
-        Objects.requireNonNull(name, "Candidate name must not be null.");
-        Objects.requireNonNull(politicalParty, "Candidate party must not be null.");
-        int candidateId = candidateDAO.addCandidate(electionId, name, politicalParty);
-        return new Candidate(String.valueOf(candidateId), name, politicalParty);
+    public static final class ImportResult {
+        public final int newlyRegistered;
+        public final int alreadyExisted;
+        public final int alreadyEnrolled;
+        public final Map<String, String> generatedPins;
+
+        ImportResult(int newlyRegistered, int alreadyExisted, int alreadyEnrolled,
+                     Map<String, String> generatedPins) {
+            this.newlyRegistered = newlyRegistered;
+            this.alreadyExisted = alreadyExisted;
+            this.alreadyEnrolled = alreadyEnrolled;
+            this.generatedPins = generatedPins;
+        }
     }
 
     // ── Voting ────────────────────────────────────────────────────────────
+
+    // Casts a ballot as the currently logged-in voter.
+    public synchronized Vote castVote(String candidateId) throws VotingException, SQLException {
+        if (!session.isLoggedIn())
+            throw new IllegalStateException("No voter is logged in. Please log in first.");
+        return castVote(String.valueOf(session.getVoterId()), candidateId);
+    }
 
     public synchronized Vote castVote(String voterId, String candidateId)
             throws VotingException, SQLException {
@@ -270,6 +503,8 @@ public class VotingManager {
     // ── Export ────────────────────────────────────────────────────────────
 
     public synchronized void exportResults(String filePath) throws IOException, SQLException {
+        requireAdmin();
+        requireCompleted("export results from");
         Objects.requireNonNull(filePath, "File path must not be null.");
 
         ElectionDAO.ElectionRecord record = requireElection();
@@ -355,6 +590,7 @@ public class VotingManager {
     // ── Removal ───────────────────────────────────────────────────────────
 
     public synchronized void removeVoterFromElection(int voterId) throws SQLException {
+        requireAdmin();
         ElectionDAO.ElectionRecord record = requireElection();
         if ("ACTIVE".equals(record.status))
             throw new IllegalStateException(
@@ -369,6 +605,7 @@ public class VotingManager {
     }
 
     public synchronized void removeCandidateFromElection(int candidateId) throws SQLException {
+        requireAdmin();
         ElectionDAO.ElectionRecord record = requireElection();
         if ("ACTIVE".equals(record.status))
             throw new IllegalStateException(
@@ -394,6 +631,20 @@ public class VotingManager {
 
     public synchronized List<Vote> getVotes() throws SQLException {
         return Collections.unmodifiableList(voteDAO.getVotesForElection(electionId));
+    }
+
+    // Whether the currently logged-in voter has already voted in this election.
+    // Lets the voter see their own status without exposing anyone else's.
+    public synchronized boolean hasCurrentVoterVoted() throws SQLException {
+        if (!session.isLoggedIn())
+            throw new IllegalStateException("No voter is logged in. Please log in first.");
+        return voterDAO.hasVoted(electionId, session.getVoterId());
+    }
+
+    // Every election, newest first — used by the admin's Select Election list
+    public static List<ElectionDAO.ElectionRecord> getAllElections() throws SQLException {
+        requireAdmin();
+        return electionDAO.getAllElections();
     }
 
     public int getElectionId() { return electionId; }

@@ -1,6 +1,7 @@
 package com.voting;
 
 import java.sql.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -218,6 +219,46 @@ class ElectionDAO {
         }
     }
 
+    public static final class VoterElection {
+        public final ElectionRecord election;
+        public final boolean hasVoted;
+
+        public VoterElection(ElectionRecord election, boolean hasVoted) {
+            this.election = election;
+            this.hasVoted = hasVoted;
+        }
+    }
+
+    // Active elections this voter is enrolled in — the only ones they may vote in
+    public List<VoterElection> getActiveElectionsForVoter(int voterId) throws SQLException {
+        String sql = "SELECT e.election_id, e.name, e.start_time, e.end_time, e.status, "
+                + "e.parent_election_id, ev.has_voted "
+                + "FROM elections e "
+                + "JOIN election_voters ev ON ev.election_id = e.election_id "
+                + "WHERE ev.voter_id = ? AND e.status = 'ACTIVE' "
+                + "ORDER BY e.election_id DESC";
+        List<VoterElection> results = new ArrayList<>();
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, voterId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    int parentId = rs.getInt("parent_election_id");
+                    Integer parentElectionId = rs.wasNull() ? null : parentId;
+                    ElectionRecord election = new ElectionRecord(
+                            rs.getInt("election_id"),
+                            rs.getString("name"),
+                            rs.getObject("start_time", LocalDateTime.class),
+                            rs.getObject("end_time", LocalDateTime.class),
+                            rs.getString("status"),
+                            parentElectionId);
+                    results.add(new VoterElection(election, rs.getBoolean("has_voted")));
+                }
+            }
+        }
+        return results;
+    }
+
     private ElectionRecord mapRow(ResultSet rs) throws SQLException {
         int parentId = rs.getInt("parent_election_id");
         Integer parentElectionId = rs.wasNull() ? null : parentId;
@@ -303,43 +344,79 @@ class VoteDAO {
 
 class VoterDAO {
 
-    public void registerVoter(int voterId, String name) throws SQLException {
-        String sql = "INSERT INTO voters (voter_id, name) VALUES (?, ?)";
+    public void registerVoter(int voterId, String name, LocalDate dateOfBirth,
+                              String passwordHash) throws SQLException {
+        String sql = "INSERT INTO voters (voter_id, name, date_of_birth, password_hash) "
+                + "VALUES (?, ?, ?, ?)";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, voterId);
             stmt.setString(2, name);
+            stmt.setObject(3, dateOfBirth);
+            stmt.setString(4, passwordHash);
+            stmt.executeUpdate();
+        }
+    }
+
+    // Used when an existing voter is re-imported with a DOB so a PIN can be generated
+    public void updateVoterCredentials(int voterId, LocalDate dateOfBirth, String passwordHash)
+            throws SQLException {
+        String sql = "UPDATE voters SET date_of_birth = ?, password_hash = ? WHERE voter_id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setObject(1, dateOfBirth);
+            stmt.setString(2, passwordHash);
+            stmt.setInt(3, voterId);
             stmt.executeUpdate();
         }
     }
 
     public Voter findByVoterId(int voterId) throws SQLException {
-        String sql = "SELECT voter_id, name FROM voters WHERE voter_id = ?";
+        String sql = "SELECT voter_id, name, date_of_birth, password_hash FROM voters "
+                + "WHERE voter_id = ?";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, voterId);
             try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next())
-                    return new Voter(String.valueOf(rs.getInt("voter_id")), rs.getString("name"));
+                if (rs.next()) {
+                    Voter voter = new Voter(
+                            String.valueOf(rs.getInt("voter_id")),
+                            rs.getString("name"),
+                            rs.getObject("date_of_birth", LocalDate.class));
+                    voter.setPasswordHash(rs.getString("password_hash"));
+                    return voter;
+                }
                 return null;
             }
         }
     }
 
+    public void updatePasswordHash(int voterId, String passwordHash) throws SQLException {
+        String sql = "UPDATE voters SET password_hash = ? WHERE voter_id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, passwordHash);
+            stmt.setInt(2, voterId);
+            stmt.executeUpdate();
+        }
+    }
+
     public List<Voter> getAllVoters() throws SQLException {
-        String sql = "SELECT voter_id, name FROM voters";
+        String sql = "SELECT voter_id, name, date_of_birth FROM voters";
         List<Voter> voters = new ArrayList<>();
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
             while (rs.next())
-                voters.add(new Voter(String.valueOf(rs.getInt("voter_id")), rs.getString("name")));
+                voters.add(new Voter(String.valueOf(rs.getInt("voter_id")),
+                        rs.getString("name"),
+                        rs.getObject("date_of_birth", LocalDate.class)));
         }
         return voters;
     }
 
     public List<Voter> getVotersForElection(int electionId) throws SQLException {
-        String sql = "SELECT v.voter_id, v.name "
+        String sql = "SELECT v.voter_id, v.name, v.date_of_birth "
                 + "FROM voters v "
                 + "JOIN election_voters ev ON v.voter_id = ev.voter_id "
                 + "WHERE ev.election_id = ? "
@@ -350,7 +427,9 @@ class VoterDAO {
             stmt.setInt(1, electionId);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next())
-                    voters.add(new Voter(String.valueOf(rs.getInt("voter_id")), rs.getString("name")));
+                    voters.add(new Voter(String.valueOf(rs.getInt("voter_id")),
+                            rs.getString("name"),
+                            rs.getObject("date_of_birth", LocalDate.class)));
             }
         }
         return voters;
@@ -422,6 +501,32 @@ class VoterDAO {
             stmt.setInt(1, electionId);
             stmt.setInt(2, voterId);
             return stmt.executeUpdate() > 0;
+        }
+    }
+}
+
+class AdminDAO {
+
+    public static final class AdminRecord {
+        public final String adminId;
+        public final String passwordHash;
+
+        public AdminRecord(String adminId, String passwordHash) {
+            this.adminId = adminId;
+            this.passwordHash = passwordHash;
+        }
+    }
+
+    public AdminRecord findAdmin(String adminId) throws SQLException {
+        String sql = "SELECT admin_id, password_hash FROM admins WHERE admin_id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, adminId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next()
+                        ? new AdminRecord(rs.getString("admin_id"), rs.getString("password_hash"))
+                        : null;
+            }
         }
     }
 }

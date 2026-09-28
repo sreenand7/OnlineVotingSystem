@@ -30,3 +30,6 @@ replay_pid*
 
 # Windows junk
 Thumbs.db
+
+# Voter data files
+*.csv
