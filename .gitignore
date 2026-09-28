@@ -25,7 +25,7 @@ replay_pid*
 # VS Code
 .vscode/
 
-# Mac junk (just in case)
+# Mac junk
 .DS_Store
 
 # Windows junk

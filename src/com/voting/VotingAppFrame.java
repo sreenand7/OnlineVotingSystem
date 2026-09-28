@@ -22,7 +22,7 @@ class AddCandidatePanel extends JPanel {
     private JTextField partyField;
 
     public AddCandidatePanel(VotingAppFrame frame) {
-        this.frame = frame;
+        this.frame = frame; 
         setBackground(UIConstants.BG_DARK);
         setLayout(new GridBagLayout());
         buildUI();
@@ -217,7 +217,9 @@ class CandidatesPanel extends JPanel implements VotingAppFrame.Refreshable {
 
     private final VotingAppFrame frame;
     private DefaultTableModel    tableModel;
+    private JTable               table;
     private String               returnScreen = VotingAppFrame.SCREEN_ELECTION_MGMT;
+    private boolean              isUpcoming   = true;
 
     public CandidatesPanel(VotingAppFrame frame) {
         this.frame = frame;
@@ -234,24 +236,61 @@ class CandidatesPanel extends JPanel implements VotingAppFrame.Refreshable {
                 () -> frame.showScreen(returnScreen));
         add(header, BorderLayout.NORTH);
 
-        tableModel = new DefaultTableModel(new String[]{"ID", "Candidate", "Party"}, 0) {
-            @Override public boolean isCellEditable(int r, int c) { return false; }
+        tableModel = new DefaultTableModel(new String[]{"ID", "Candidate", "Party", "Action"}, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return c == 3 && isUpcoming; }
         };
-        JTable table = UIConstants.createStyledTable(tableModel);
+        table = UIConstants.createStyledTable(tableModel);
         table.getColumnModel().getColumn(0).setPreferredWidth(80);
-        table.getColumnModel().getColumn(1).setPreferredWidth(300);
-        table.getColumnModel().getColumn(2).setPreferredWidth(250);
+        table.getColumnModel().getColumn(1).setPreferredWidth(260);
+        table.getColumnModel().getColumn(2).setPreferredWidth(200);
+
+        TableColumn actionCol = table.getColumnModel().getColumn(3);
+        actionCol.setPreferredWidth(100);
+        actionCol.setMaxWidth(120);
+        actionCol.setCellRenderer(new RemoveCandidateButtonRenderer());
+        actionCol.setCellEditor(new RemoveCandidateButtonEditor());
+
         add(UIConstants.wrapInScrollPane(table), BorderLayout.CENTER);
+    }
+
+    private void handleRemoveCandidate(int row) {
+        if (row < 0 || row >= tableModel.getRowCount()) return;
+        String candidateId = tableModel.getValueAt(row, 0).toString();
+        String candidateName = tableModel.getValueAt(row, 1).toString();
+
+        Object[] options = {"Cancel", "Remove"};
+        int confirm = JOptionPane.showOptionDialog(frame,
+                "Are you sure you want to remove " + candidateName
+                        + " from this election?",
+                "Remove Candidate", JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
+                null, options, options[0]);
+        if (confirm != 1) return;
+
+        VotingManager manager = frame.getCurrentManager();
+        if (manager == null) return;
+        try {
+            manager.removeCandidateFromElection(Integer.parseInt(candidateId));
+            refresh();
+        } catch (IllegalStateException ex) {
+            JOptionPane.showMessageDialog(frame, ex.getMessage(),
+                    "Cannot Remove", JOptionPane.WARNING_MESSAGE);
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(frame,
+                    "Database error: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     @Override
     public void refresh() {
         tableModel.setRowCount(0);
         if (frame.getCurrentManager() == null) return;
+        ElectionDAO.ElectionRecord record = frame.getCurrentRecord();
+        isUpcoming = record != null && "UPCOMING".equals(record.status);
         try {
             for (Candidate c : frame.getCurrentManager().getCandidates()) {
                 tableModel.addRow(new Object[]{
-                        c.getCandidateId(), c.getName(), c.getPoliticalParty()
+                        c.getCandidateId(), c.getName(), c.getPoliticalParty(), "Remove"
                 });
             }
         } catch (SQLException ex) {
@@ -260,7 +299,57 @@ class CandidatesPanel extends JPanel implements VotingAppFrame.Refreshable {
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
+
+    private class RemoveCandidateButtonRenderer extends JLabel implements TableCellRenderer {
+        RemoveCandidateButtonRenderer() {
+            setOpaque(true);
+            setFont(new Font("Segoe UI", Font.BOLD, 11));
+            setForeground(Color.WHITE);
+            setBackground(UIConstants.DANGER_RED);
+            setHorizontalAlignment(SwingConstants.CENTER);
+            setBorder(BorderFactory.createEmptyBorder(4, 12, 4, 12));
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable t, Object val,
+                boolean sel, boolean focus, int row, int col) {
+            setText("Remove");
+            setBackground(isUpcoming ? UIConstants.DANGER_RED : UIConstants.BTN_DARK);
+            setForeground(isUpcoming ? Color.WHITE : UIConstants.TEXT_MUTED);
+            return this;
+        }
+    }
+
+    private class RemoveCandidateButtonEditor extends AbstractCellEditor implements TableCellEditor {
+        private final JButton button;
+
+        RemoveCandidateButtonEditor() {
+            button = new JButton("Remove");
+            button.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            button.setForeground(Color.WHITE);
+            button.setBackground(UIConstants.DANGER_RED);
+            button.setBorderPainted(false);
+            button.setFocusPainted(false);
+            button.addActionListener(e -> {
+                int row = table.getEditingRow();
+                fireEditingStopped();
+                if (row >= 0 && row < tableModel.getRowCount()) {
+                    SwingUtilities.invokeLater(() -> handleRemoveCandidate(row));
+                }
+            });
+        }
+
+        @Override
+        public Component getTableCellEditorComponent(JTable t, Object val,
+                boolean sel, int row, int col) {
+            return button;
+        }
+
+        @Override
+        public Object getCellEditorValue() { return "Remove"; }
+    }
 }
+
 
 class CreateElectionPanel extends JPanel {
 
@@ -694,17 +783,18 @@ class ElectionManagementPanel extends JPanel implements VotingAppFrame.Refreshab
                 frame.setCurrentRecord(record);
                 statusLabel.setText(record.status);
                 switch (record.status) {
-                    case "UPCOMING":
+                    case "UPCOMING" -> {
                         statusLabel.setForeground(UIConstants.STATUS_UPCOMING);
                         startBtn.setEnabled(true);
-                        break;
-                    case "ACTIVE":
+                    }
+                    case "ACTIVE" -> {
                         statusLabel.setForeground(UIConstants.STATUS_ACTIVE);
                         startBtn.setEnabled(false);
-                        break;
-                    default:
+                    }
+                    default -> {
                         statusLabel.setForeground(UIConstants.STATUS_COMPLETED);
                         startBtn.setEnabled(false);
+                    }
                 }
             }
         } catch (SQLException ex) {
@@ -772,10 +862,10 @@ class ElectionSelectionPanel extends JPanel {
             frame.setCurrentRecord(record);
 
             switch (record.status) {
-                case "UPCOMING":  frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT); break;
-                case "ACTIVE":    frame.showScreen(VotingAppFrame.SCREEN_VOTING); break;
-                case "COMPLETED": frame.showScreen(VotingAppFrame.SCREEN_ELECTION_DETAILS); break;
-                default: showError("Unknown election status: " + record.status);
+                case "UPCOMING" -> frame.showScreen(VotingAppFrame.SCREEN_ELECTION_MGMT);
+                case "ACTIVE" -> frame.showScreen(VotingAppFrame.SCREEN_VOTING);
+                case "COMPLETED" -> frame.showScreen(VotingAppFrame.SCREEN_ELECTION_DETAILS);
+                default -> showError("Unknown election status: " + record.status);
             }
         } catch (NumberFormatException ex) {
             showError("Please enter a valid numeric ID.");
@@ -1018,9 +1108,9 @@ class PreviousElectionActionPanel extends JPanel implements VotingAppFrame.Refre
         idLabel.setText("ID: " + record.electionId);
         statusLabel.setText(record.status);
         switch (record.status) {
-            case "UPCOMING":  statusLabel.setForeground(UIConstants.STATUS_UPCOMING); break;
-            case "ACTIVE":    statusLabel.setForeground(UIConstants.STATUS_ACTIVE); break;
-            default:          statusLabel.setForeground(UIConstants.STATUS_COMPLETED); break;
+            case "UPCOMING" -> statusLabel.setForeground(UIConstants.STATUS_UPCOMING);
+            case "ACTIVE" -> statusLabel.setForeground(UIConstants.STATUS_ACTIVE);
+            default -> statusLabel.setForeground(UIConstants.STATUS_COMPLETED);
         }
     }
 }
@@ -1726,8 +1816,9 @@ class ImportVoterPanel extends JPanel {
             String col1 = headers[1].trim().toLowerCase().replaceAll("[^a-z0-9]", "");
             if (!(col0.contains("roll") || col0.contains("id") || col0.contains("number"))
                     || !(col1.contains("name"))) {
-                showError("CSV header must contain 'Roll Number' and 'Name' columns.\n"
-                        + "Found: \"" + headers[0].trim() + "\", \"" + headers[1].trim() + "\"");
+                showError("""
+                          CSV header must contain 'Roll Number' and 'Name' columns.\n
+                          Found: \"""" + headers[0].trim() + "\", \"" + headers[1].trim() + "\"");
                 return;
             }
 
@@ -1841,6 +1932,7 @@ class VotersPanel extends JPanel implements VotingAppFrame.Refreshable {
     private DefaultTableModel    tableModel;
     private JTable               table;
     private String               returnScreen = VotingAppFrame.SCREEN_ELECTION_MGMT;
+    private boolean              isUpcoming   = true;
 
     public VotersPanel(VotingAppFrame frame) {
         this.frame = frame;
@@ -1857,13 +1949,13 @@ class VotersPanel extends JPanel implements VotingAppFrame.Refreshable {
                 () -> frame.showScreen(returnScreen));
         add(header, BorderLayout.NORTH);
 
-        tableModel = new DefaultTableModel(new String[]{"ID", "Voter", "Status"}, 0) {
-            @Override public boolean isCellEditable(int r, int c) { return false; }
+        tableModel = new DefaultTableModel(new String[]{"ID", "Voter", "Status", "Action"}, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return c == 3 && isUpcoming; }
         };
         table = UIConstants.createStyledTable(tableModel);
         table.getColumnModel().getColumn(0).setPreferredWidth(80);
-        table.getColumnModel().getColumn(1).setPreferredWidth(300);
-        table.getColumnModel().getColumn(2).setPreferredWidth(150);
+        table.getColumnModel().getColumn(1).setPreferredWidth(260);
+        table.getColumnModel().getColumn(2).setPreferredWidth(120);
 
         table.getColumnModel().getColumn(2).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
@@ -1880,13 +1972,57 @@ class VotersPanel extends JPanel implements VotingAppFrame.Refreshable {
             }
         });
 
+        TableColumn actionCol = table.getColumnModel().getColumn(3);
+        actionCol.setPreferredWidth(100);
+        actionCol.setMaxWidth(120);
+        actionCol.setCellRenderer(new RemoveVoterButtonRenderer());
+        actionCol.setCellEditor(new RemoveVoterButtonEditor());
+
         add(UIConstants.wrapInScrollPane(table), BorderLayout.CENTER);
+    }
+
+    private void handleRemoveVoter(int row) {
+        if (row < 0 || row >= tableModel.getRowCount()) return;
+        String voterId = tableModel.getValueAt(row, 0).toString();
+        String voterName = tableModel.getValueAt(row, 1).toString();
+        String status = tableModel.getValueAt(row, 2).toString();
+
+        if (status.startsWith("Voted")) {
+            JOptionPane.showMessageDialog(frame,
+                    "This voter has already voted and cannot be removed.",
+                    "Cannot Remove", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        Object[] options = {"Cancel", "Remove"};
+        int confirm = JOptionPane.showOptionDialog(frame,
+                "Are you sure you want to remove voter " + voterId
+                        + " (" + voterName + ") from this election?",
+                "Remove Voter", JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
+                null, options, options[0]);
+        if (confirm != 1) return;
+
+        VotingManager manager = frame.getCurrentManager();
+        if (manager == null) return;
+        try {
+            manager.removeVoterFromElection(Integer.parseInt(voterId));
+            refresh();
+        } catch (IllegalStateException ex) {
+            JOptionPane.showMessageDialog(frame, ex.getMessage(),
+                    "Cannot Remove", JOptionPane.WARNING_MESSAGE);
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(frame,
+                    "Database error: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     @Override
     public void refresh() {
         tableModel.setRowCount(0);
         if (frame.getCurrentManager() == null) return;
+        ElectionDAO.ElectionRecord record = frame.getCurrentRecord();
+        isUpcoming = record != null && "UPCOMING".equals(record.status);
         try {
             List<Vote> votes = frame.getCurrentManager().getVotes();
             Set<String> votedIds = new HashSet<>();
@@ -1895,13 +2031,63 @@ class VotersPanel extends JPanel implements VotingAppFrame.Refreshable {
             for (Voter v : frame.getCurrentManager().getVoters()) {
                 tableModel.addRow(new Object[]{
                         v.getVoterId(), v.getName(),
-                        votedIds.contains(v.getVoterId()) ? "Voted \u2713" : "Not Voted"
+                        votedIds.contains(v.getVoterId()) ? "Voted \u2713" : "Not Voted",
+                        "Remove"
                 });
             }
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(frame, "Error loading voters: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private class RemoveVoterButtonRenderer extends JLabel implements TableCellRenderer {
+        RemoveVoterButtonRenderer() {
+            setOpaque(true);
+            setFont(new Font("Segoe UI", Font.BOLD, 11));
+            setForeground(Color.WHITE);
+            setBackground(UIConstants.DANGER_RED);
+            setHorizontalAlignment(SwingConstants.CENTER);
+            setBorder(BorderFactory.createEmptyBorder(4, 12, 4, 12));
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable t, Object val,
+                boolean sel, boolean focus, int row, int col) {
+            setText("Remove");
+            setBackground(isUpcoming ? UIConstants.DANGER_RED : UIConstants.BTN_DARK);
+            setForeground(isUpcoming ? Color.WHITE : UIConstants.TEXT_MUTED);
+            return this;
+        }
+    }
+
+    private class RemoveVoterButtonEditor extends AbstractCellEditor implements TableCellEditor {
+        private final JButton button;
+
+        RemoveVoterButtonEditor() {
+            button = new JButton("Remove");
+            button.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            button.setForeground(Color.WHITE);
+            button.setBackground(UIConstants.DANGER_RED);
+            button.setBorderPainted(false);
+            button.setFocusPainted(false);
+            button.addActionListener(e -> {
+                int row = table.getEditingRow();
+                fireEditingStopped();
+                if (row >= 0 && row < tableModel.getRowCount()) {
+                    SwingUtilities.invokeLater(() -> handleRemoveVoter(row));
+                }
+            });
+        }
+
+        @Override
+        public Component getTableCellEditorComponent(JTable t, Object val,
+                boolean sel, int row, int col) {
+            return button;
+        }
+
+        @Override
+        public Object getCellEditorValue() { return "Remove"; }
     }
 }
 
@@ -1932,6 +2118,7 @@ public class VotingAppFrame extends JFrame {
 
     public interface Refreshable { void refresh(); }
 
+    @SuppressWarnings("OverridableMethodCallInConstructor")
     public VotingAppFrame() {
         super("Online Voting System");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -1971,8 +2158,8 @@ public class VotingAppFrame extends JFrame {
 
     public void showScreen(String name) {
         JPanel panel = screens.get(name);
-        if (panel instanceof Refreshable)
-            ((Refreshable) panel).refresh();
+        if (panel instanceof Refreshable refreshable)
+            refreshable.refresh();
         cardLayout.show(cardPanel, name);
     }
 
@@ -1993,7 +2180,7 @@ public class VotingAppFrame extends JFrame {
         SwingUtilities.invokeLater(() -> {
             try {
                 UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
-            } catch (Exception ignored) { }
+            } catch (ClassNotFoundException | IllegalAccessException | InstantiationException | UnsupportedLookAndFeelException ignored) { }
 
             UIManager.put("Panel.background",             UIConstants.BG_DARK);
             UIManager.put("OptionPane.background",        UIConstants.BG_DARK);

@@ -352,6 +352,36 @@ public class VotingManager {
         System.out.println("[EXPORT] Results written to: " + filePath);
     }
 
+    // ── Removal ───────────────────────────────────────────────────────────
+
+    public synchronized void removeVoterFromElection(int voterId) throws SQLException {
+        ElectionDAO.ElectionRecord record = requireElection();
+        if ("ACTIVE".equals(record.status))
+            throw new IllegalStateException(
+                    "Voters cannot be removed after the election has started.");
+        if ("COMPLETED".equals(record.status))
+            throw new IllegalStateException(
+                    "Voters cannot be removed because the election has already ended.");
+        if (voterDAO.hasVoted(electionId, voterId))
+            throw new IllegalStateException(
+                    "This voter has already voted and cannot be removed.");
+        voterDAO.removeVoterFromElection(electionId, voterId);
+    }
+
+    public synchronized void removeCandidateFromElection(int candidateId) throws SQLException {
+        ElectionDAO.ElectionRecord record = requireElection();
+        if ("ACTIVE".equals(record.status))
+            throw new IllegalStateException(
+                    "Candidates cannot be removed after the election has started.");
+        if ("COMPLETED".equals(record.status))
+            throw new IllegalStateException(
+                    "Candidates cannot be removed because the election has already ended.");
+        if (candidateDAO.candidateHasVotes(electionId, candidateId))
+            throw new IllegalStateException(
+                    "This candidate has already received votes and cannot be removed.");
+        candidateDAO.removeCandidateFromElection(electionId, candidateId);
+    }
+
     // ── Accessors ─────────────────────────────────────────────────────────
 
     public synchronized Collection<Voter> getVoters() throws SQLException {

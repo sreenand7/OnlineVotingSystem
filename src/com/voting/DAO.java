@@ -60,6 +60,28 @@ class CandidateDAO {
         }
     }
 
+    public boolean candidateHasVotes(int electionId, int candidateId) throws SQLException {
+        String sql = "SELECT 1 FROM votes WHERE election_id = ? AND candidate_id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, electionId);
+            stmt.setInt(2, candidateId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    public boolean removeCandidateFromElection(int electionId, int candidateId) throws SQLException {
+        String sql = "DELETE FROM candidates WHERE election_id = ? AND candidate_id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, electionId);
+            stmt.setInt(2, candidateId);
+            return stmt.executeUpdate() > 0;
+        }
+    }
+
     private Candidate mapRow(ResultSet rs) throws SQLException {
         return new Candidate(
                 String.valueOf(rs.getInt("candidate_id")),
@@ -390,6 +412,16 @@ class VoterDAO {
             stmt.setInt(1, electionId);
             stmt.setInt(2, voterId);
             stmt.executeUpdate();
+        }
+    }
+
+    public boolean removeVoterFromElection(int electionId, int voterId) throws SQLException {
+        String sql = "DELETE FROM election_voters WHERE election_id = ? AND voter_id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, electionId);
+            stmt.setInt(2, voterId);
+            return stmt.executeUpdate() > 0;
         }
     }
 }
